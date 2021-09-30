@@ -1,0 +1,172 @@
+
+
+安装kafka(单机版和集群版,在配置文件上不同)
+
+创建 admin 用户组
+groupadd admin
+创建使用admin用户组(-g 后面跟对应用户组)的用户 admin(第二个admin代表用户), -m (自动建立用户的登入目录)
+useradd -g admin admin -m
+
+chmod +w /etc/sudoers
+vim /etc/sudoers
+在文件最后添加如下内容：
+# add privilege for admin
+
+admin ALL=(ALL) ALL
+
+# end
+
+
+在admin用户下操作
+su - admin
+
+解压
+tar -zxvf /home/admin/softwares/kafka_2.11-2.0.0.tgz -C /home/admin/mw/
+
+重命名
+mv /home/admin/mw/kafka_2.11-2.0.0 /home/admin/mw/kafka
+
+创建日志目录
+mkdir /home/admin/mw/kafka/log
+
+修改配置(使用cat直接覆盖需要注意对应版本,不同版本配置可能不同!!!)
+cat > /home/admin/mw/kafka/config/server.properties<<'EOF'
+
+# 标示当前server在集群中的id,从0开始
+broker.id=0
+
+# 端口
+port=9092
+
+# 本机ip, 可以使用 hostname
+host.name=10.57.17.184
+
+# 日志分区数,分区多并发高,但会产生更多文件
+# (一般看使用的应用个数,同盾主要atreus使用,单机就为1,集群就看atreus有几个节点)
+num.partitions=1
+
+# zk地址 ip:port 单机填一个,集群填多个,通过逗号分割
+# 可以使用 hostname 
+zookeeper.connect=10.57.17.184:2181
+#zookeeper.connect=10.57.17.184:2181,10.57.17.185:2181,10.57.17.186:2181
+
+# Timeout in ms for connecting to zookeeper
+zookeeper.connection.timeout.ms=6000
+
+# 存储日志文件的目录列表
+log.dirs=/home/admin/mw/kafka/log 
+
+# kafka 处理网络请求响应线程数
+num.network.threads=3
+
+# kafka 处理磁盘IO线程数
+num.io.threads=8
+
+# The send buffer (SO_SNDBUF) used by the socket server
+socket.send.buffer.bytes=102400
+
+# The receive buffer (SO_RCVBUF) used by the socket server
+socket.receive.buffer.bytes=102400
+
+# The maximum size of a request that the socket server will accept (protection against OOM)
+socket.request.max.bytes=104857600
+
+# The number of threads per data directory to be used for log recovery at startup and flushing at shutdown.
+# This value is recommended to be increased for installations with data dirs located in RAID array.
+num.recovery.threads.per.data.dir=1
+
+# 组元数据和topic的复制因子,开发建议1,生产建议3确保可用性
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+
+# The following configurations control the disposal of log segments. The policy can
+# from the end of the log.
+# The minimum age of a log file to be eligible for deletion due to age
+log.retention.hours=168
+
+# The maximum size of a log segment file. When this size is reached a new log segment will be created.
+log.segment.bytes=1073741824
+
+# The interval at which log segments are checked to see if they can be deleted according
+# to the retention policies
+log.retention.check.interval.ms=300000
+
+
+# 新成员加入延时,测试开发环境建议 0 ,以便快速测试,生产默认是3秒最佳
+group.initial.rebalance.delay.ms=0
+
+EOF
+
+
+查看配置:
+vim /home/admin/mw/kafka/config/server.properties
+
+通过kafka-server-start.sh可以修改 KAFKA_HEAP_OPTS="-Xmx1G -Xms1G" 配置占用内存大小
+vi /home/admin/mw/kafka/bin/kafka-server-start.sh
+vi /home/admin/mw/kafka_2.11-2.0.0/bin/kafka-server-start.sh
+
+
+启动应用
+指定配置文件启动
+/home/admin/mw/kafka/bin/kafka-server-start.sh -daemon /home/admin/mw/kafka/config/server.properties
+/home/admin/mw/kafka_2.11-2.0.0/bin/kafka-server-start.sh -daemon /home/admin/mw/kafka_2.11-2.0.0/config/server.properties
+bin/kafka-server-start.sh -daemon config/server.properties
+
+查看应用
+jps
+看到Kafka表示已经启动了
+或
+ps -ef|grep kafka
+
+查看日志(logs是kafka默认日志目录,log是我们指定的存储日志文件的目录列表)
+tail -800f /home/admin/mw/kafka/logs/server.log
+tail -800f /home/admin/mw/kafka_2.11-2.0.0/logs/server.log
+显示
+[2019-10-13 22:56:21,740] INFO [KafkaServer id=0] started (kafka.server.KafkaServer)
+表示启动成功
+
+
+
+停止
+/home/admin/mw/kafka/bin/kafka-server-stop.sh
+
+
+异常情况:假死
+jps和ps -ef|grep kafka均无法查询
+通过 lsof -i:9092 (根据实际配置端口)
+然后kill -9 对应端口的pid
+
+如应用使用kafka报 is unavailable or invalid, will attempt rediscovery
+可以尝试在kafka配置文件(/config/server.properties)中
+搜索 listeners
+打开注释,并添加地址
+listeners=PLAINTEXT://本机ip地址:kafka的端口号
+
+
+使用下列命令尝试查找:
+netstat -nltup|grep 9092
+
+ss -lntpd | grep :9092
+
+lsof(list open files)是一个列出系统上被进程打开的文件的相关信息。
+lsof -i tcp:9092
+
+[admin@localhost config]$ netstat -nltup|grep 9092
+(Not all processes could be identified, non-owned process info
+ will not be shown, you would have to be root to see it all.)
+tcp6       0      0 10.1.11.62:9092         :::*                    LISTEN      15421/java
+
+
+
+
+
+
+
+
+
+
+
+
+
+

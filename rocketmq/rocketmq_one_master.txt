@@ -1,0 +1,153 @@
+1.环境要求:
+	1.1 64bit OS, Linux/Unix/Mac is recommended;
+	1.2 64bit JDK 1.8+;
+	1.3 Maven 3.2.x
+	
+2.安装
+	--> 将 rocketmq-all-4.3.2-source-release.zip 上传到 /tempdata 文件夹下
+
+	--> 在 /usr/local 新建一个文件夹 rocketmq
+		mkdir /usr/local/maven/rocketmq
+		
+	-->	移动 rocketmq-all-4.3.2-source-release.zip 到 /usr/local/maven/rocketmq 下
+		cd /tempdata
+		mv rocketmq-all-4.3.2-source-release.zip /usr/local/maven/rocketmq
+		
+	--> 安装解压 .zip 文件的工具
+		yum list unzip    查看最新的安装版本
+		yum install unzip.x86_64  (yum install + 最新的安装版本)
+		
+	--> 进入 /usr/local/maven/rocketmq 目录,解压jdk
+		cd /usr/local/maven/rocketmq 
+		unzip rocketmq-all-4.3.2-source-release.zip
+		
+	--> 查看rocketmq解压后大小(6.6M)
+		du -sh rocketmq-all-4.3.2
+		
+	--> 查看目录文件
+		ls -l rocketmq-all-4.3.2
+		
+	--> 使用 Maven 来编译整个项目,在解压后目录下
+		cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2
+		mvn -Prelease-all -DskipTests clean install -U
+		
+	--> 进入到 distribution/target/apache-rocketmq 目录,查看目录文件(benchmark,bin,conf,lib,LICENSE,NOTICE,README.md)
+		cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq
+
+    --> 保存退出   :wq
+
+    --> 重新加载配置文件
+	
+3.使用RocketMQ
+	
+	3.1 启动 NameServer(启动的时候先启动 namesrv，然后启动 broker)
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq
+    先进入 RocketMQ 安装目录下的  distribution/target/apache-rocketmq 目录
+	
+	--> 如显示 : nohup: 忽略输入并把输出追加到"nohup.out"
+		先直接回车,后续再研究什么问题
+
+	--> nohup sh bin/mqnamesrv &
+	启动命令,并且常驻内存(
+	nohup sh mqnamesrv & ：属于后台启动
+	sh mqnamesrv ：属于终端启动，直接输出日志信息，按 ctrl+c 可直接关闭退出
+	)
+
+    --> tail -f ~/logs/rocketmqlogs/namesrv.log     或     less nohup.out 
+	查看启动日志能看到：The Name Server boot success字样则成功
+	
+	
+	3.2 启动 Broker
+
+    --> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq
+    先进入 RocketMQ 安装目录下的  distribution/target/apache-rocketmq 目录
+	(nohup sh bin/mqbroker -n localhost:9876 & ：属于后台启动
+	sh bin/mqbroker -n localhost:9876 ：属于终端启动，直接输出日志信息，按 ctrl+c 可直接关闭退出
+	)
+ 
+    --> nohup sh bin/mqbroker -n 10.0.0.21:9876 &
+	启动命令，并且常驻内存:注意ip地址要配置成为服务的ip地址，保证地址以及端口能够访问
+    
+    --> tail -f ~/logs/rocketmqlogs/broker.log   或   less nohup.out 
+	查看启动日志，如果看到 "The broker[%s, 172.30.30.233:10911] boot success..." ,则表示启动成功
+
+	默认分配内存过大,导致broker不能正常启动!!!
+    如果 tail -f ~/logs/rocketmqlogs/broker.log 提示找不到文件，则打开 当前目录(apache-rocketmq)下的 nohup.out 日志文件查看，发现启动 Broker 失败：无法分配内存
+
+	这是因为 apache-rocketmq/bin 目录下启动 nameserv 与 broker 的 runbroker.sh 和 runserver.sh 文件中默认分配的内存太大，而系统实际内存却太小导致启动失败
+	
+	通常像虚拟机上安装的 CentOS 服务器内存可能是没有高的，只能调小。实际中应该根据服务器内存情况，配置一个合适的值
+	找到下面的 runbroker.sh 和 runserver.sh 文件
+	
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq/bin
+	
+	--> vi runserver.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 4g 调小一点(注: 貌似用notepad++修改无效,可能nameserver在运行,直接在centos上修改)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms4g -Xmx4g -Xmn2g -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m"
+		JAVA_OPT="${JAVA_OPT} -server -Xms256m -Xmx256m -Xmn125m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m"
+
+	--> vi runbroker.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 8g 调小一点(注: 貌似用notepad++修改无效,可能nameserver在运行,直接在centos上修改)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms8g -Xmx8g -Xmn4g"
+		JAVA_OPT="${JAVA_OPT} -server -Xms128m -Xmx128m -Xmn64m"
+		JAVA_OPT="${JAVA_OPT} -XX:MaxDirectMemorySize=2g"
+	
+	--> 重新在 apache-rocketmq 目录下执行命令,其他目录无法启动
+		cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq
+		nohup sh bin/mqbroker -n 192.168.25.137:9876 &
+		tail -f ~/logs/rocketmqlogs/broker.log  或 less nohup.out 
+		然后再次启动 broker 时就成功了,broker 注册到了 nameserver 上了（localhost:9876)
+	
+	
+4.测试
+	4.1 发送消息
+
+    发送/接收消息之前，需要告诉客户端(Producer、Consumer)名称服务器的位置，RocketMQ 提供了多种方法来实现这一点:
+
+		-- 编程方式，如：producer.setNamesrvAddr("ip:port")
+		-- Java 选项，如：rocketmq.namesrv.addr
+		-- 环境变量，如：NAMESRV_ADDR
+		-- HTTP 端点
+
+    官方指导命令：
+
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq
+    --> export NAMESRV_ADDR=10.0.0.21:9876
+    --> sh bin/tools.sh org.apache.rocketmq.example.quickstart.Producer
+     运行之后会发送大量的消息，之后就会退出,如下:
+	 SendResult [sendStatus=SEND_OK, msgId= ...
+
+	4.2接收消息
+
+    官方指导命令：
+
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq
+    --> sh bin/tools.sh org.apache.rocketmq.example.quickstart.Consumer
+	 在同一窗口中可以使用消费者类来进行接收消息，显然是多线程的,如下:
+     ConsumeMessageThread_%d Receive New Messages: [MessageExt...
+
+    
+
+5.关闭服务器
+
+    同样都是在 RocketMQ 安装目录下的  distribution/target/apache-rocketmq 目录下执行命令
+    与启动顺序相反进行关闭，先关闭 broker、在关闭 nameserv
+
+    --> sh bin/mqshutdown broker
+	显示如下:
+    The mqbroker(36695) is running...
+    Send shutdown request to mqbroker(36695) OK
+     
+    --> sh bin/mqshutdown namesrv
+	显示如下:
+    The mqnamesrv(36664) is running...
+    Send shutdown request to mqnamesrv(36664) OK
+
+
+
+
+
+
+
+
+

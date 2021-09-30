@@ -1,0 +1,70 @@
+﻿
+# 在线安装git
+yum install -y git
+
+# 创建存放公钥的文件夹
+mkdir /home/git/.ssh/authorized_keys
+
+# 备份用户公钥
+把C:\Users\86181\.ssh\id_rsa.pub文件导入到/home/git/.ssh/authorized_keys
+# 这里elasticjob就是你需要自定义的文件夹的名称,初始化git服务
+git init --bare elasticjob.git
+
+# 远程下载linux上的elasticjob文件夹
+(git@ 表示的是哪个linux用户@,密码对应该用户的密码)
+(:后面是 --bare生成的文件夹路径+文件夹名)
+git clone git@192.168.25.161:/home/git/repository/elasticjob.git
+idea下载直接使用 192.168.25.161:/home/git/repository/elasticjob.git 地址即可
+# 显示远程为空文件夹,这时候把需要的文件添加进去,再add,commit&push即可
+(
+git clone admin@10.57.17.226:/home/admin/code/atreus_nj.git
+git clone admin@10.57.17.226:/home/admin/code/freyr_nj.git
+git clone admin@10.57.17.226:/home/admin/code/pre_nj.git
+git clone admin@10.57.17.226:/home/admin/code/bifrost_nj.git
+)
+
+
+
+
+
+
+
+
+# 离线安装git
+yumdownloader curl-devel expat-devel gettext-devel openssl-devel zlib-devel --resolve --destdir=/home/download/
+
+yumdownloader curl-devel expat-devel gettext-devel --resolve --destdir=/home/download2/
+
+yum -y install curl-devel expat-devel gettext-devel --downloadonly --downloaddir /home/download3/
+yum -y install lftp --downloadonly --downloaddir /root/rpm/
+
+依赖问题处理:
+rpm -ivh --force --nodeps 强制安装
+或把依赖拷贝到一个文件夹下:
+rpm -ivh *.rpm
+
+rpm
+-ivh：安装显示安装进度
+-Va：校验所有的RPM软件包，查找丢失的文件[View Lost]；
+-e：删除包
+-ql 查看是否安装了
+
+download2
+rpm -ivh curl-7.29.0-54.el7.x86_64.rpm libsmartcols-2.23.2-61.el7.x86_64.rpm cyrus-sasl-lib-2.1.26-23.el7.i686.rpm libss-1.42.9-16.el7.x86_64.rpm e2fsprogs-1.42.9-16.el7.x86_64.rpm libssh2-1.8.0-3.el7.i686.rpm e2fsprogs-libs-1.42.9-16.el7.x86_64.rpm libssh2-1.8.0-3.el7.x86_64.rpm expat-2.1.0-10.el7_3.i686.rpm libstdc++-4.8.5-39.el7.i686.rpm expat-devel-2.1.0-10.el7_3.i686.rpm libunistring-0.9.3-9.el7.i686.rpm expat-devel-2.1.0-10.el7_3.x86_64.rpm libuuid-2.23.2-61.el7.i686.rpm gettext-common-devel-0.19.8.1-2.el7.noarch.rpm libuuid-2.23.2-61.el7.x86_64.rpm gettext-devel-0.19.8.1-2.el7.i686.rpm libverto-0.2.5-4.el7.i686.rpm gettext-devel-0.19.8.1-2.el7.x86_64.rpm libxml2-2.9.1-6.el7_2.3.i686.rpm gettext-libs-0.19.8.1-2.el7.i686.rpm ncurses-libs-5.9-14.20130511.el7_4.i686.rpm glib2-2.56.1-5.el7.i686.rpm nspr-4.21.0-1.el7.i686.rpm glib2-2.56.1-5.el7.x86_64.rpm nspr-4.21.0-1.el7.x86_64.rpm glibc-2.17-292.el7.i686.rpm nss-3.44.0-4.el7.i686.rpm keyutils-libs-1.5.8-3.el7.i686.rpm nss-3.44.0-4.el7.x86_64.rpm krb5-libs-1.15.1-37.el7_7.2.i686.rpm nss-pem-1.0.3-7.el7.i686.rpm krb5-libs-1.15.1-37.el7_7.2.x86_64.rpm nss-pem-1.0.3-7.el7.x86_64.rpm libblkid-2.23.2-61.el7.i686.rpm nss-softokn-3.44.0-5.el7.i686.rpm libblkid-2.23.2-61.el7.x86_64.rpm nss-softokn-3.44.0-5.el7.x86_64.rpm libcom_err-1.42.9-16.el7.i686.rpm nss-softokn-freebl-3.44.0-5.el7.i686.rpm libcom_err-1.42.9-16.el7.x86_64.rpm nss-softokn-freebl-3.44.0-5.el7.x86_64.rpm libcroco-0.6.12-4.el7.i686.rpm nss-sysinit-3.44.0-4.el7.x86_64.rpm libcroco-0.6.12-4.el7.x86_64.rpm nss-tools-3.44.0-4.el7.x86_64.rpm libcurl-7.29.0-54.el7.i686.rpm nss-util-3.44.0-3.el7.i686.rpm libcurl-7.29.0-54.el7.x86_64.rpm nss-util-3.44.0-3.el7.x86_64.rpm libcurl-devel-7.29.0-54.el7.i686.rpm openldap-2.4.44-21.el7_6.i686.rpm libcurl-devel-7.29.0-54.el7.x86_64.rpm openldap-2.4.44-21.el7_6.x86_64.rpm libdb-5.3.21-25.el7.i686.rpm openssl-1.0.2k-19.el7.x86_64.rpm libdb-5.3.21-25.el7.x86_64.rpm openssl-libs-1.0.2k-19.el7.i686.rpm libdb-utils-5.3.21-25.el7.x86_64.rpm openssl-libs-1.0.2k-19.el7.x86_64.rpm libffi-3.0.13-18.el7.i686.rpm pcre-8.32-17.el7.i686.rpm libgcc-4.8.5-39.el7.i686.rpm readline-6.2-11.el7.i686.rpm libgomp-4.8.5-39.el7.i686.rpm readline-6.2-11.el7.x86_64.rpm libidn-1.28-4.el7.i686.rpm sqlite-3.7.17-8.el7.i686.rpm libmount-2.23.2-61.el7.i686.rpm util-linux-2.23.2-61.el7.x86_64.rpm libmount-2.23.2-61.el7.x86_64.rpm xz-libs-5.2.2-1.el7.i686.rpm libselinux-2.5-14.1.el7.i686.rpm zlib-1.2.7-18.el7.i686.rpm libsepol-2.5-10.el7.i686.rpm --force --nodeps
+
+
+
+
+tar -zxvf git-2.9.5.tar.gz
+cd git-2.9.5
+./configure --prefix=/user/local/git //请设置为自己的路径，也可不指定安装在默认位置
+make
+make install
+
+./configure --prefix=/home/git/test
+
+
+
+
+
+

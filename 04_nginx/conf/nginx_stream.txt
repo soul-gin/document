@@ -1,0 +1,17 @@
+
+# 和 http 平级
+
+stream {
+    upstream neo4j {
+        server 10.58.10.226:7687;
+        server 10.57.17.214:7687;
+    }
+
+    server {
+        listen 7687;
+        proxy_responses 1;
+        proxy_timeout 20s;
+        proxy_bind $server_addr:$remote_port;
+        proxy_pass neo4j;
+    }
+}

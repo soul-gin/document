@@ -1,0 +1,375 @@
+
+
+
+mysql卸载
+先查看是否安装了mysql
+rpm -qa | grep -i mysql
+
+卸载前关闭MySQL服务( status start stop )
+service mysqld start 
+service mysqld stop 
+service mysqld restart
+
+卸载删除MySQL各类组件
+rpm -ev  组件名 
+收集MySQL对应的文件夹信息
+find / -name mysql
+删除对应文件夹
+rm -rf  路径/文件名
+
+删除mysql用户及用户组
+more /etc/passwd | grep mysql
+more /etc/shadow | grep mysql 
+more /etc/group | grep mysql  
+userdel mysql
+groupdel mysql
+
+确认MySQL是否卸载删除
+rpm -qa | grep -i mysql
+
+
+
+安装操作(root或者有sudo权限的用户)
+安装包放置路径
+mkdir -p /data01/softwares
+
+安装路径
+mkdir -p /data01/db/mysql
+
+上传libaio和mysql-5.7.23-linux-glibc2.12-x86_64.tar.gz至/data01/softwares目录
+cd /data01/softwares;ll;
+
+需要先安装好mysql依赖libaio:
+rpm -ivh libaio-0.3.109-13.el7.x86_64.rpm
+
+解压
+tar -zxvf /data01/softwares/mysql-5.7.23-linux-glibc2.12-x86_64.tar.gz -C /data01/db/mysql
+
+# 重命名mysql主目录
+cd /data01/db/mysql
+mv mysql-5.7.23-linux-glibc2.12-x86_64 mysql5.7  
+
+注意:先删除默认的配置文件,安装完成后再自定义
+rm -f /etc/my.cnf
+
+# 创建mysql用户组
+groupadd mysql
+
+# 创建mysql用户，并且设置为mysql组  
+useradd -r -g mysql mysql
+
+# 创建数据目录和日志目录
+mkdir -p /data01/db/mysql/mysql5.7/{data,log}
+
+chown -R mysql:mysql /data01/db/mysql/mysql5.7/
+chmod 777 -R /data01/db/mysql/mysql5.7/data log
+
+# 进入msyql主目录
+cd /data01/db/mysql/mysql5.7
+
+注意！注意！注意！(下面此步骤执行完会生成密码，一定记得复制保存起来)
+执行mysql初始化(如果配置了 my.cnf 可以执行第一条命令,否则第二条指定目录)
+bin/mysqld --initialize --user=mysql
+bin/mysqld --initialize --user=mysql --basedir=/data01/db/mysql/mysql5.7 --datadir=/data01/db/mysql/mysql5.7/data
+
+把列显示复制到这里,主要是密码
+显示为:A temporary password is generated for root@localhost: q9W/hC5pQkFl
+
+
+# 复制mysql.server文件
+cp support-files/mysql.server /etc/init.d/mysqld
+
+
+修改配置(3个文件)
+修改mysqld启动脚本
+vi /etc/init.d/mysqld
+
+# 参数赋值,添加目录(查找 basedir= 然后配置成刚刚新建的目录)
+basedir=/data01/db/mysql/mysql5.7
+datadir=/data01/db/mysql/mysql5.7/data
+
+
+修改系统环境变量生效
+vi /etc/profile
+
+# env mysql begin
+export PATH=$PATH:/data01/db/mysql/mysql5.7/bin
+# env mysql end
+
+是系统环境变量生效
+source /etc/profile
+
+验证(可看到mysql的bin目录)
+echo $PATH
+
+创建mysql配置文件
+
+vi /etc/my.cnf
+
+
+#
+# begin my.cfg
+#
+
+[mysqld]
+basedir = /data01/db/mysql/mysql5.7
+datadir = /data01/db/mysql/mysql5.7/data
+tmpdir=/data01/db/mysql/mysql5.7/log
+port = 3306
+# This value is unique for different machines. It is recommended to increase from 1.
+server_id = 1
+socket = /data01/db/mysql/mysql5.7/log/mysql.sock
+log-error = /data01/db/mysql/mysql5.7/log/mysql.error
+pid-file = /data01/db/mysql/mysql5.7/log/mysql.pid
+character_set_server = utf8
+collation-server = utf8_general_ci
+lower_case_table_names = 1
+# 
+max_allowed_packet = 200M
+max_connections = 1000
+sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
+# log-bin主从环境才需要:主从日志master-bin,日志保留天数3天;如果已经存在大量master-bin,设置过期时间为1,重启下mysql即可
+# log-bin=master-bin
+# expire_logs_days=3
+# deal remote connect error
+skip-name-resolve
+
+
+
+[client]
+socket = /data01/db/mysql/mysql5.7/log/mysql.sock
+default-character-set=utf8
+
+
+[mysql]
+default-character-set=utf8
+
+# test begin
+[mysqld_safe]
+log-error = /data01/db/mysql/mysql5.7/data/error.log
+pid-file = /data01/db/mysql/mysql5.7/data/mysql.pid
+#
+# include all files from the config directory
+#
+!includedir /etc/my.cnf.d
+# test end
+
+
+#
+# end file
+#
+
+
+
+启动服务
+service mysqld start 
+service mysqld stop 
+service mysqld restart
+
+注意:(服务宕机,重启使用 service mysqld start  失败时)
+使用该命令启动
+/etc/init.d/mysqld start
+/etc/init.d/mysql start
+停止服务
+/etc/init.d/mysqld stop
+/etc/init.d/mysql stop
+
+修改权限
+进入mysql,提示输入密码时，输入之前保存的密码
+mysql -h 127.0.0.1 -u root -p
+mysql -h localhost -u root -p
+
+修改新密码( alter user user() identified by "新密码"; )
+alter user user() identified by "123456";
+
+允许外部连接访问
+GRANT ALL PRIVILEGES ON *.* TO 用户名@'%' IDENTIFIED BY '密码' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON *.* TO tongdun@'%' IDENTIFIED BY 'tongdun' WITH GRANT OPTION;
+-- 测试用
+-- GRANT ALL PRIVILEGES ON *.* TO root@'%' IDENTIFIED BY '123456' WITH GRANT OPTION;
+
+允许本机访问( GRANT ALL PRIVILEGES ON *.* TO '用户名'@'localhost' IDENTIFIED BY '密码' WITH GRANT OPTION; )
+GRANT ALL PRIVILEGES ON *.* TO 'tongdun'@'localhost' IDENTIFIED BY 'tongdun' WITH GRANT OPTION;
+-- 测试用
+-- GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY '123456' WITH GRANT OPTION;
+
+-- 刷新权限
+flush privileges;
+
+-- mysql登录后,后续授权时提示需要先修改密码,使用下列命令
+mysql> ALTER USER USER() IDENTIFIED BY '123456';
+mysql> GRANT ALL PRIVILEGES ON *.* TO root@'%' IDENTIFIED BY '123456' WITH GRANT OPTION;
+mysql> flush privileges;
+
+
+登录mysql
+进入mysql格式： mysql -h主机地址 -u用户名 －p用户密码
+例如： 
+mysql -h 10.57.17.214 -u root -p
+123456
+
+
+集群模式(主从模式)
+假设已经安装A、B两台机器mysql，其中A作为mster,B作为slave。
+分别修改A/B两台机器/etc/my.cnf文件一项配置，并重启mysql (service mysql restart)
+A机器 /etc/my.cnf:
+       log-bin=master-bin
+B机器 /etc/my.cnf:
+       log-bin= relay-bin
+
+
+
+A执行：
+
+mysql -h 127.0.0.1 -u root -p  登录mysql
+grant replication slave on *.* to 'sync'@'slave机器IP' identified by '123456';
+   创建用户(sync/123456)来给slave同步使用
+show master status; 查看master状态，输出如下
++-------------------+-----------+--------------+------------------+-------------------+
+| File              | Position  | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++-------------------+-----------+--------------+------------------+-------------------+
+| master-bin.000004 | 229548120 |              |                  |                   |
++-------------------+-----------+--------------+------------------+-------------------+
+
+flush privileges; 刷新配置
+service mysqld restart; 重启mysql
+
+B执行：
+
+mysql -h 127.0.0.1 -u root -p  登录mysql
+
+mysql>CHANGE MASTER TO
+>MASTER_HOST='master所在服务器的IP',
+>MASTER_USER='master授权的账号',
+>MASTER_PASSWORD='master授权的密码',
+>MASTER_LOG_FILE='master的日志文件名master的show master status的file，实际填写mysql-bin.000004',
+>MASTER_LOG_POS=master的日志所在位置master的show master status的Position;   --注意这一行没有单引号
+
+start slave;开启复制
+
+show slave status\G    查看状态
+
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for master to send event
+                  Master_Host: master的IP地址
+                  Master_User: root
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: master-bin.000001
+          Read_Master_Log_Pos: 1516
+               Relay_Log_File: slave-bin.000004
+                Relay_Log_Pos: 1117
+        Relay_Master_Log_File: master-bin.000001
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+......    
+Slave_IO_Running: YES 表示slave的日志读取线程开启
+Slave_SQL_Running: YES 表示SQL执行线程开启
+两者都为YES表示主从模式成功
+
+常见问题记录及解决方法
+建表出现this is incompatible with sql_mode=only_full_group_by错误时执行
+查看生效的
+show variables like "sql_mode";
+
+set sql_mode='';
+set sql_mode='NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES';
+
+
+
+
+
+
+
+
+如果mysql安装忘记密码,或者密码失效
+
+1.停止服务(sudo 或者 su root)
+service mysqld stop
+
+2.修改 /etc/my.cnf,在[mysqld]下面添加skip-grant-tables跳过密码验证
+skip-grant-tables
+保存修改
+
+3.重启mysql
+service mysqld start
+
+4.可以通过whereis mysql找到mysql安装路径
+输入：mysql -u root -p
+密码为空，直接回车
+
+5.接着需要选择一个数据库：
+use mysql;
+
+6.修改密码为123456,并授权远程,本地登录
+update user set authentication_string=password("123456") where user="root";
+update user set authentication_string=password("tongdun") where user="tongdun";
+flush privileges;
+
+
+
+注释掉
+skip-grant-tables
+重启mysql才能配置下列权限
+
+GRANT ALL PRIVILEGES ON *.* TO root@'%' IDENTIFIED BY '123456' WITH GRANT OPTION;
+
+GRANT ALL PRIVILEGES ON *.* TO root@'localhost' IDENTIFIED BY '123456' WITH GRANT OPTION;
+
+
+
+
+
+
+mysql安装时显示密码过期:
+
+1.停止服务(sudo 或者 su root)
+service mysqld stop
+
+2.修改 /etc/my.cnf,在[mysqld]下面添加skip-grant-tables跳过密码验证
+skip-grant-tables
+保存修改
+
+3.重启mysql
+service mysqld start
+
+4.修改用户过期字段
+查看过期状态(会发现root为Y)
+select host,user,password_expired,account_locked from mysql.user;
+
+更新用户过期状态为N
+update mysql.user set password_expired='N';
+
+注释掉
+skip-grant-tables
+重启mysql才能配置下列权限
+
+设置密码不过期
+alter user 'root'@'localhost' password expire never;
+flush privileges;
+
+
+
+
+Starting MySQL. ERROR! The server quit without updating PID file (/home/mysql/mysql-5.7.23/tmp/mysql.pid).
+看 /home/mysql/mysql-5.7.23/tmp/mysql.error 报的什么错误
+
+mysql重新初始化,需要删除 data tmp 文件夹下所有文件
+再 bin/mysqld --initialize --user=mysql
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

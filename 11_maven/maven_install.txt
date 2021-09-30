@@ -1,0 +1,107 @@
+
+
+linux安装maven
+
+1、安装wget命令
+
+yum -y install wget
+
+2、下载maven安装包
+
+wget http://mirrors.cnnic.cn/apache/maven/maven-3/3.5.4/binaries/apache-maven-3.5.4-bin.tar.gz
+ 
+3.解压maven安装包
+
+tar -zxvf apache-maven-3.5.4-bin.tar.gz
+
+4.配置maven
+
+vim /etc/profile
+
+在配置文件配置
+
+export MAVEN_HOME=/opt/apache-maven-3.5.4
+export PATH=$MAVEN_HOME/bin:$PATH
+
+配置文件生效
+
+source /etc/profile
+
+5.查看maven
+
+mvn -version
+
+
+scp -r /home/tongdun/softwares/apache-maven-3.5.4-bin.tar.gz tongdun@10.30.12.3:/home/tongdun/mw/
+
+
+mvn package -DskipTests -e
+
+
+或者只修改当前用户的环境变量
+vim ~/.bash_profile
+
+# 文件最后添加
+# maven
+export MAVEN_HOME=/home/tongdun/maven/apache-maven-3.5.4
+export PATH=$MAVEN_HOME/bin:$PATH
+
+# 然后让配置生效
+source ~/.bash_profile
+
+
+cat > /home/tongdun/maven/apache-maven-3.5.4/conf/settings.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <!-- 离线配置开关 -->
+  <offline>true</offline>
+  
+  <localRepository>/home/tongdun/maven/repository</localRepository>
+  
+  <pluginGroups></pluginGroups>
+  
+  <proxies></proxies>
+  
+  <servers></servers>
+   
+  <mirrors>
+	<mirror>
+      <id>forceLocal</id>
+      <mirrorOf>*</mirrorOf>
+      <name>forceLocal</name>
+	  <!-- linux下也是这么配置,注意linux下有三个 /// -->
+      <!-- <url>file:///home/maven/repository</url> -->
+      <!-- <url>file://D:\java\maven\repository</url> -->
+	  <url>file:///home/tongdun/maven/repository</url>
+    </mirror>
+  </mirrors>
+  
+  <profiles></profiles>
+  
+</settings>
+
+EOF
+
+
+
+
+
+
+在maven仓库中删除以.lastUpdate结尾的文件
+1.切换到maven的本地仓库
+ 
+2.在当前目录打开cmd命令行
+ 
+3.执行命令：for /r %i in (*.lastUpdated) do del %i
+
+
+
+
+
+
+
+
+

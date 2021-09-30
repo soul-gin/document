@@ -1,0 +1,68 @@
+
+
+1.客户端接入
+aql 
+
+2.查看数据库
+show namespaces
+
+3.查看表
+show sets
+
+3.查看接入配置
+get all
+
+
+4.执行插入操作
+insert into my_namespace(pk,id,name,host,port,info) values('my_pk_value','001','Nier','192.168.0.9','10000','运行中')
+
+5.执行查询操作
+aql> select * from my_namespace
++-------+-------+---------------+---------+-------------+
+| id    | name  | host          | port    | info        |
++-------+-------+---------------+---------+-------------+
+| "001" | "Nier"| "192.168.0.9" | "10000" | "运行中" 	|
++-------+-------+---------------+---------+-------------+
+
+表清理(linux命令行执行: aql -c "TRUNCATE ns1" 全部清理)
+TRUNCATE ns1.preserver
+
+查询
+select * from ns1.preserver
+
+执行删除操作
+delete from my_namespace where pk='my_pk_value'
+
+执行查询操作
+select * from my_namespace
+
+
+使用MAP数据格式
+insert into ns1.systemConfig (PK, configMap, updateTime) values ('httpTimeOut', MAP('{"connectTimeOut":40000, "socketTimeOut":40000}'), '2019-08-07')
+select * from ns1.systemConfig where pk='httpTimeOut'
+delete from ns1.systemConfig where pk='httpTimeOut'
+
+
+使用LIST数据格式
+delete from ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_ENT'
+delete from ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL'
+
+先插入一条空数据,指定数据类型为 LIST
+insert into ns1.preloanmodel_inner_score(pk,list) values('FORM_LOCALSCORE_PERSONAL',List('[]'))
+
+OPERATE LIST_APPEND(list,MAP('{"target_name": "客户年龄分", "weight":"30%","value_field":"N_DC_VB_AGE","score_field":"F_DC_VB_AGESCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL' on ns1.preloanmodel_score where pk='list_key'
+OPERATE LIST_APPEND(list,MAP('{"target_name": "客户性别分", "weight":"10%","value_field":"S_DC_VB_SEX","score_field":"F_DC_VB_SEXSCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL' on ns1.preloanmodel_score where pk='list_key'
+或(多条通过逗号进行分割)
+OPERATE LIST_APPEND(list,MAP('{"target_name": "客户年龄分", "weight":"30%","value_field":"N_DC_VB_AGE","score_field":"F_DC_VB_AGESCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL',OPERATE LIST_APPEND(list,MAP('{"target_name": "客户性别分", "weight":"10%","value_field":"S_DC_VB_SEX","score_field":"F_DC_VB_SEXSCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL' on ns1.preloanmodel_score where pk='list_key'
+
+select * from ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL';
+
+
+
+
+
+
+
+
+
+

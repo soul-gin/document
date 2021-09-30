@@ -1,0 +1,435 @@
+CentOS7 处理防火墙方式
+systemctl stop firewalld  关闭防火墙(一次性)
+systemctl disable firewalld  永久关闭防火墙(修改配置,开机后不启用防火墙)
+
+1.搭建背景
+	生产情况下,一般rocketmq有两种搭建方式:
+	1.1 多master模式
+		可适用于绝大多数生产环境,仅在单台机器宕机时,该台master上还未消费的消息无法继续被消费了,但可日志查询
+	1.2 多master多slave 同步双写(向两台服务器写两次消息,均成功才算消息发送成功)模式
+		主要适用于与金钱业务相关的消息,单台master机器宕机时,还未消费的消息,可以通过同步写的slave继续消费
+		
+
+2.双master模式搭建
+	2.1 vi /etc/hosts
+		准备两台机器,修改 /etc/hosts(ip随意,目前使用的是 192.168.25.129 和 192.168.25.137两台)
+		添加如下信息:
+#用于通过netty心跳通讯(129和137两台机器通讯)
+192.168.25.101 rocketmq-nameserver1
+#master即为broker,用于存储消息  
+192.168.25.101 rocketmq-master1
+
+192.168.25.111 rocketmq-nameserver2
+192.168.25.111 rocketmq-master2
+
+192.168.25.101 docker1
+192.168.25.111 docker2
+	
+	2.2 修改完毕两台机器的 /etc/hosts 后, ESC, :wq 保存退出
+	
+	2.3 service network restart
+		重启网卡,使配置生效
+	
+	2.4 分别在每台主机ping另一台主机ip以及主机名,需确保能ping通
+		如:在129的主机
+		ping 192.168.25.111
+		ping rocketmq-nameserver2
+		ping rocketmq-master2
+		
+3.安装
+(使用mvn构建linux下运行的文件)
+	--> mkdir /tempdata
+
+	--> 将 rocketmq-all-4.3.2-source-release.zip 上传到 /tempdata 文件夹下
+
+	--> 在 /usr/local 新建一个文件夹 rocketmq
+		mkdir /usr/local/maven/rocketmq
+		
+	-->	移动 rocketmq-all-4.3.2-source-release.zip 到 /usr/local/maven/rocketmq 下
+		cd /tempdata
+		mv rocketmq-all-4.3.2-source-release.zip /usr/local/maven/rocketmq
+		
+	--> 安装解压 .zip 文件的工具
+		yum list unzip    查看最新的安装版本
+		yum install unzip.x86_64  (yum install + 最新的安装版本)
+		yum install zip (安装压缩工具)
+		
+	--> 进入 /usr/local/maven/rocketmq 目录,解压jdk
+		cd /usr/local/maven/rocketmq 
+		unzip rocketmq-all-4.3.2-source-release.zip
+		
+	--> 查看rocketmq解压后大小(6.6M)
+		du -sh rocketmq-all-4.3.2
+		
+	--> 查看目录文件
+		ls -l rocketmq-all-4.3.2
+		
+	--> 使用 Maven 来编译整个项目,在解压后目录下
+		cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2
+		mvn -Prelease-all -DskipTests clean install -U
+		
+		注意: mvn应首选阿里镜像地址
+		<mirror>      
+			<id>nexus-aliyun</id>    
+			<name>nexus-aliyun</name>  
+			<url>http://maven.aliyun.com/nexus/content/groups/public</url>    
+			<mirrorOf>central</mirrorOf>      
+		</mirror> 
+		
+	--> 进入到 distribution/target/apache-rocketmq 目录,查看目录文件(benchmark,bin,conf,lib,LICENSE,NOTICE,README.md)
+		cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq
+		
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq/bin
+		vi runserver.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 4g 调小一点(注: 貌似用notepad++修改无效,可能nameserver在运行,直接在centos上修改)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms4g -Xmx4g -Xmn2g -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m"
+		JAVA_OPT="${JAVA_OPT} -server -Xms256m -Xmx256m -Xmn125m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m"
+
+	--> vi runbroker.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 8g 调小一点(注: 貌似用notepad++修改无效,可能nameserver在运行,直接在centos上修改)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms8g -Xmx8g -Xmn4g"
+		JAVA_OPT="${JAVA_OPT} -server -Xms128m -Xmx128m -Xmn64m"
+		JAVA_OPT="${JAVA_OPT} -XX:MaxDirectMemorySize=2g"
+		
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq/conf/2m-2s-async/
+	
+		rm -r *.properties    先清空配置
+	
+		cd /tempdata    再将文件先传至 /tempdata下面
+
+		mv /tempdata/broker-a.properties /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq/conf/2m-2s-async/
+		
+		mv /tempdata/broker-a-s.properties /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq/conf/2m-2s-async/
+		
+		mv /tempdata/broker-b.properties /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq/conf/2m-2s-async/
+		
+		mv /tempdata/broker-b-s.properties /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq/conf/2m-2s-async/
+		
+		可以根据Rocketmq_two_master_slave.txt把双主双从的四个配置文件一起配置了(通过FileZilla先传到/tempdata,直接复制到rocketmq目录总是有点问题)
+
+    --> 保存退出   :wq
+
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target
+		rm -f apache-rocketmq.tar.gz
+		rm -f apache-rocketmq.zip
+		删除原版压缩包
+		
+	--> cd /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target
+		tar -czvf apache-rocketmq.tar.gz apache-rocketmq
+		zip -r apache-rocketmq.zip apache-rocketmq			(yum install zip  在zip命令无法识别时)
+		将修改完配置的 apache-rocketmq 打成压缩包,这个压缩包就能使用了(可以保存在windows,后续也能使用)
+		
+	--> cp /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq.tar.gz /tempdata
+		cp /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq.zip /tempdata
+		以便通过 FileZilla 复制到本地
+		
+	--> mkdir /usr/local/apache-rocketmq
+		
+	--> cp /usr/local/maven/rocketmq/rocketmq-all-4.3.2/distribution/target/apache-rocketmq.tar.gz /usr/local/apache-rocketmq
+
+	
+	
+[注: windows下编译的.sh文件仅适应windows执行格式,尽量不要使用windows下编译好的压缩包去linux下执行
+	否则会报下列错误
+mqnamesrv:行2: $'\r': 未找到命令
+mqnamesrv:行17: $'\r': 未找到命令
+mqnamesrv:行46: 语法错误: 未预期的文件结尾
+
+虽然可通过
+	yum install dos2unix
+	dos2unix xxx.sh
+	将xxx.sh转换成unix下执行的脚本,但要转换多个,较为麻烦
+
+(使用mvn构建windows下运行的文件)
+	--> 使用idea作为构建工具(推荐) 或者 本机配置了mvn环境
+
+	--> 到windows rocketmq的根目录下(有root的pom.xml的目录)
+	
+	--> 修改 windows项目所在路径\rocketmq\distribution\bin
+	
+	--> 修改 runserver.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 4g 调小一点(修改初始内存 最大内存 新生代 初始持久代 和 最大持久代)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms4g -Xmx4g -Xmn2g -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m"
+		JAVA_OPT="${JAVA_OPT} -server -Xms256m -Xmx256m -Xmn128m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m"
+
+	--> 修改 runbroker.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 8g 调小一点(注: 貌似用notepad++修改无效,可能nameserver在运行,直接在centos上修改)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms8g -Xmx8g -Xmn4g"
+		JAVA_OPT="${JAVA_OPT} -server -Xms128m -Xmx128m -Xmn64m"
+		JAVA_OPT="${JAVA_OPT} -XX:MaxDirectMemorySize=2g"
+		
+	--> 可选修改文件 : runserver.cmd   runbroker.cmd  (rem 代表注释)
+
+	--> mvn -Prelease-all -DskipTests clean install -U
+		在idea的左下角,点击Terminal,会切换到项目根目录,输入上面命令(推荐) 或者 使用命令行(需配MAVEN_HOME 环境变量)
+		
+	-->	项目所在路径\rocketmq\distribution\target
+		找到 apache-rocketmq.tar.gz 或 apache-rocketmq.zip 即可,最好不要用于linux系统,解决兼容问题较为麻烦
+]	
+	
+	
+	
+4.搭建开始
+	--> 将 apache-rocketmq.tar.gz 上传到 /tempdata
+	
+	--> mkdir /usr/local/apache-rocketmq
+
+	--> tar -zxvf apache-rocketmq.tar.gz -C /usr/local/apache-rocketmq
+		解压到/usr/local/apache-rocketmq
+	
+	--> cd /usr/local/apache-rocketmq/bin
+	
+	--> vi runserver.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 4g 调小一点(注: 貌似用notepad++修改无效,可能nameserver在运行,直接在centos上修改)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms4g -Xmx4g -Xmn2g -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m"
+		JAVA_OPT="${JAVA_OPT} -server -Xms256m -Xmx256m -Xmn125m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m"
+
+	--> vi runbroker.sh 
+		文件中 修改 JVM 配置下的第一行，将原来 8g 调小一点(注: 貌似用notepad++修改无效,可能nameserver在运行,直接在centos上修改)
+		#JAVA_OPT="${JAVA_OPT} -server -Xms8g -Xmx8g -Xmn4g"
+		JAVA_OPT="${JAVA_OPT} -server -Xms128m -Xmx128m -Xmn64m"
+		JAVA_OPT="${JAVA_OPT} -XX:MaxDirectMemorySize=2g"
+		
+	4.1--> ln -s apache-rocketmq rocketmq
+	创建rocketmq软链接指向 apache-rocketmq ( -s 代表软链接,不加-s就是硬链接, 不需要先创建rocketmq文件夹,避免路径错误)
+	
+	4.2--> mkdir /usr/local/rocketmq/store
+		   mkdir /usr/local/rocketmq/store/commitlog
+		   mkdir /usr/local/rocketmq/store/consumequeue
+		   mkdir /usr/local/rocketmq/store/index
+	创建 rocketmq/store 文件夹,用于指定存储数据的路径,不使用默认的路径,以方便查询,清理数据
+	
+	4.3--> cd /usr/local/rocketmq/conf/2m-noslave
+		   vi /usr/local/rocketmq/conf/2m-noslave/broker-a.properties
+		   vi /usr/local/rocketmq/conf/2m-noslave/broker-b.properties
+		   修改配置信息,默认有两个master(a,b),如果需要添加master,那么需要拷贝一份命名为c
+		   
+		   将文件信息全部替换成(注意上面创建的store等文件夹均要和配置文件中的属性值一致!!!)
+
+#
+# begin
+#	
+	   
+# 所属集群名字
+# 附加：如果有多个master，那么每个master配置的名字应该一样，要不然识别不了对方，不知道是一个集群内部的
+brokerClusterName=rocketmq-cluster
+# 此处需手动更改 #
+# broker名字，注意此处不同的配置文件填写的不一样
+# 附加：按配置文件文件名来匹配(修改broker-a.properties 即为 broker-a;修改broker-b.properties 即为 broker-b)
+brokerName=broker-a
+# 0 表示Master, > 0 表示slave
+brokerId=0
+# 此处许手动更改 #
+#（此处nameserver跟host配置相匹配 /etc/hosts下面配置，9876为默认rk服务默认端口）nameServer 地址，分号分割
+# 附加：broker启动时会跟nameserver建一个长连接，broker通过长连接才会向nameserver发新建的topic主题，然后java的客户端才能跟nameserver端发起长连接，向nameserver索取topic，找到topic主题之后，判断其所属的broker，建立长连接进行通讯，这是一个至关重要的路由的概念，重点，也是区别于其它版本的一个重要特性
+namesrvAddr=rocketmq-nameserver1:9876;rocketmq-nameserver2:9876
+# 在发送消息时，自动创建服务器不存在的Topic，默认创建的队列数
+defaultTopicQueueNums=4
+# 是否允许Broker 自动创建Topic，建议线下开启，线上关闭
+autoCreateTopicEnable=true
+# 是否允许Broker自动创建订阅组，建议线下开启，线上关闭
+autoCreateSubscriptionGroup=true
+# Broker 对外服务的监听端口
+listenPort=10911
+# 删除文件时间点，默认是凌晨4点
+deleteWhen=04
+# 文件保留时间，默认48小时
+fileReservedTime=120
+# commitLog每个文件的大小默认1G
+#附加：消息实际存储位置，和ConsumeQueue是mq的核心存储概念，之前搭建2m环境的时候创建在store下面，用于数据存储，consumequeue是一个逻辑的概念，消息过来之后，consumequeue并不是把消息所有保存起来，而是记录一个数据的位置，记录好之后再把消息存到commitlog文件里
+mapedFileSizeCommitLog=1073741824
+# ConsumeQueue每个文件默认存30W条，根据业务情况调整
+mapedFileSizeConsumeQueue=300000
+#destroyMapedFileIntervalForcibly=120000
+#redeleteHangedFileInterval=120000
+# 检测物理文件磁盘空间
+diskMaxUsedSpaceRatio=88
+#存储路径
+storePathRootDir=/usr/local/rocketmq/store
+#commitLog存储路径
+storePathCommitLog=/usr/local/rocketmq/store/commitlog
+#消费队列存储路径
+storePathConsumeQueue=/usr/local/rocketmq/store/consumequeue
+# 消息索引存储路径
+storePathIndex=/usr/local/rocketmq/store/index
+# checkpoint 文件存储路径
+storeCheckpoint=/usr/local/rocketmq/store/checkpoint
+#abort 文件存储路径
+abortFile=/usr/local/rocketmq/store/abort
+#限制的消息大小(默认64KB)
+maxMessageSize=65536
+# flushCommitLogLeastPages=4
+# flushConsumeQueueLeastPages=2
+# flushCommitLogThoroughInterval=10000
+# flushConsumeQueueThoroughInterval=60000
+# Broker 的角色
+# - ASYNC_MASTER 异步复制Master(速度更快)
+# - SYNC_MASTER 同步双写Master(涉及金钱消息)
+# - SLAVE
+brokerRote=ASYNC_MASTER
+# 刷盘方式
+# - ASYNC_FLUSH 异步刷盘(速度更快)
+# - SYNC_FLUSH 同步刷盘(涉及金钱消息,慢)
+flushDiskType=ASYNC_FLUSH
+#checkTransactionMessageEnable=false
+#发消息线程池数量
+#sendMessageTreadPoolNums=128
+#拉消息线程池数量
+#pullMessageTreadPoolNums=128 
+		
+#
+# end
+#	
+	 	
+	4.4--> vi /usr/local/rocketmq/conf/2m-noslave/broker-a.properties
+		   vi /usr/local/rocketmq/conf/2m-noslave/broker-b.properties
+		   
+		   两台机器上的a,b 两个配置文件均要修改,且brokerName对应properties的名字
+		   
+	4.5--> mkdir -p /usr/local/rocketmq/logs
+		   建立logs文件夹
+	
+	4.6--> cd /usr/local/rocketmq/conf && sed -i 's#${user.home}#/usr/local/rocketmq#g' *.xml
+		   替换命令 sed ,将所有 .xml 结尾的配置文件的 ${user.home} 替换成 /usr/local/rocketmq
+	
+	4.7--> RocketMq 的 JVM 调优
+		
+	   --> cd /usr/local/rocketmq/bin
+		
+	   --> vi runserver.sh 
+			文件中 修改 JVM 配置下的第一行，配置成合适的值
+			#JAVA_OPT="${JAVA_OPT} -server -Xms4g -Xmx4g -Xmn2g -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m"
+			JAVA_OPT="${JAVA_OPT} -server -Xms256m -Xmx256m -Xmn125m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m"
+			
+			注: -Xms 初始化的内存大小(空间),初始堆大小(物理内存的1/64(<1GB))
+				-Xmx 最大的内存大小(空间),最大堆大小(物理内存的1/4(<1GB))
+				-Xmn 年轻代大小
+				-XX:MetaspaceSize 初始化持久代大小,jdk8开始,替代了-XX:PermSize
+				-XX:MaxMetaspaceSize 设置持久代最大值(物理内存的1/4),jdk8开始,替代了-XX:MaxPermSize
+				建议:
+				1. MetaspaceSize 和 MaxMetaspaceSize 设置较为接近或一样大(初始值始终从20.8M开始,每发生FGC,就会扩容,-XX:PermSize的设置是在开始划分一片连续内存块空间,配置不合理就会造成浪费,故jdk8替换成-XX:MetaspaceSize更加灵活的递增);
+				2. 对于大部分项目256m即可(具体设置多大，建议稳定运行一段时间后通过jstat -gc pid确认且这个值大一些)；
+			
+			注: rocketmq启动失败?部分版本最小堆内存要1g?至少需要设置为1g?
+			
+			注: rocketmq较为吃内存,故该服务器内存配置尽可能的大
+				
+				
+
+	   --> vi runbroker.sh 
+			文件中 修改 JVM 配置下的第一行，配置成合适的值
+			#JAVA_OPT="${JAVA_OPT} -server -Xms8g -Xmx8g -Xmn4g"
+			JAVA_OPT="${JAVA_OPT} -server -Xms256m -Xmx256m -Xmn128m"
+			JAVA_OPT="${JAVA_OPT} -XX:MaxDirectMemorySize=5g"
+	
+	
+5.0 启动
+	5.1 注意启动顺序
+		启动时,先启动所有服务器的nameserver,再启动所有服务器的broker
+		停止时,先停止所有服务器的broker,再停止所有服务器的nameserver
+		
+	5.2 cd /usr/local/rocketmq/bin
+		先到bin目录下查看 ll
+	
+	5.3 nohup sh mqnamesrv &
+		通过守护线程启动,以便用户即便退出了,不关机就能够保活
+		
+	5.4 jps
+		查看 java 进程,NamesrvStartup
+		
+	5.5 tail -f -n 500 /usr/local/rocketmq/logs/rocketmqlogs/namesrv.log
+		查看namesrv日志(日志路径是刚刚修改了conf下面的 *.xml时的路径)
+	
+	5.6 nohup sh mqbroker -c /usr/local/rocketmq/conf/2m-noslave/broker-a.properties >/dev/null 2>&1 &
+		使用 -c 指定配置文件,启动 第一台(129 a.properties) 服务器的broker(虽然每个服务器配置都修改了,但需要注意每台启动对应的顺序的配置文件)
+	
+	5.7 nohup sh mqbroker -c /usr/local/rocketmq/conf/2m-noslave/broker-b.properties >/dev/null 2>&1 &
+		使用 -c 指定配置文件,启动 第二台(137 b.properties) 服务器的broker(虽然每个服务器配置都修改了,但需要注意每台启动对应的顺序的配置文件)
+		
+	5.5 tail -f -n 500 /usr/local/rocketmq/logs/rocketmqlogs/broker.log
+		查看broker日志(日志路径是刚刚修改了conf下面的 *.xml时的路径)
+		
+		注: 如果报错连接不上另一个服务器的nameserver,那么需要关闭防火墙,看文档开头
+	
+	5.6关闭服务器
+		--> cd /usr/local/rocketmq/bin
+		--> sh mqshutdown broker
+		--> sh /usr/local/rocketmq/bin/mqshutdown broker
+		显示如下:
+		The mqbroker(36695) is running...
+		Send shutdown request to mqbroker(36695) OK
+     
+		--> sh mqshutdown namesrv
+		--> sh /usr/local/rocketmq/bin/mqshutdown namesrv
+		显示如下:
+		The mqnamesrv(36664) is running...
+		Send shutdown request to mqnamesrv(36664) OK
+		
+6.0 管理后台 方式一 : ( java -jar target/rocketmq-console-ng-1.0.0.jar )
+		-->下载rocketmq-externals代码
+			找到rocketmq-console项目
+			在该项目下使用
+			mvn clean package -Dmaven.test.skip=true
+			
+			或在idea中,在该项目(rocketmq-console)下打开Termina,执行 mvn clean package -Dmaven.test.skip=true,
+			然后在该项目下的target中找到 rocketmq-console-ng-1.0.0.jar
+
+		--> 将 rocketmq-console-ng-1.0.0.jar 上传到 /tempdata
+		
+		--> cd /tempdata
+			ll
+			查看jar上传成功没
+		
+		--> java -jar /tempdata/rocketmq-console-ng-1.0.0.jar
+			启动jar
+	
+		--> 遇到Caused by: org.apache.rocketmq.remoting.exception.RemotingConnectException: connect to <172.17.0.1:10909> failed 一般是docker0网卡被设置为默认导致的
+		
+		直接启动docker,占用该端口
+		或
+		查看S:\Install_ReadMe\rocketmq 下面的html文件,记录了其他解决方式
+		
+	
+	管理后台 方式二(老版本才会去使用,目前都用springboot启动) : (在tomcat中部署一个 rocketmq-console.war)
+		--> 在 /usr/local 新建一个文件夹tomcat
+			mkdir /usr/local/tomcat
+			
+		--> 移动 tomcat…tar.gz 到 /usr/local/tomcat
+			cd /tempdata
+			mv apache-tomcat-7.0.92.tar.gz /usr/local/tomcat/
+		
+		--> 进入/usr/local/tomcat目录,解压Tomcat
+			cd /usr/local/tomcat
+			tar -zxvf apache-tomcat-7.0.92.tar.gz
+
+		--> 将 rocketmq-console.war 上传到 /tempdata
+		
+		--> mkdir /usr/local/tomcat/apache-tomcat-7.0.92/webapps/rocketmq-console
+		
+		--> cd /tempdata
+			unzip rocketmq-console.war -d /usr/local/tomcat/apache-tomcat-7.0.92/webapps/rocketmq-console
+			将 rocketmq-console.war 解压到指定目录( 通过 -d 实现 )
+			
+		--> cd /usr/local/tomcat/apache-tomcat-7.0.92/webapps/rocketmq-console/WEB-INF/classes
+			vi config.properties
+			将 rocketmq.namesrv.addr 改成
+			rocketmq.namesrv.addr=192.168.25.129:9876;192.168.25.137:9876
+		
+		--> 进入 /usr/local/tomcat/apache-tomcat-7.0.92/bin
+			cd /usr/local/tomcat/apache-tomcat-7.0.92/bin
+		
+		--> 启动tomcat
+			sh /usr/local/tomcat/apache-tomcat-7.0.92/bin/startup.sh 
+	
+	
+	
+	
+	
+	
+	
+	
+	
+		
+	
+
+	

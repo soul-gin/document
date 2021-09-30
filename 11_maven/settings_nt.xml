@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+  
+  <!-- 本地仓库路径 -->
+  <localRepository>D:\java\maven\repository</localRepository>
+
+  <pluginGroups></pluginGroups>
+ 
+  <proxies></proxies>
+  
+  <servers></servers>
+
+  <mirrors>
+    <mirror>      
+		<id>nexus-aliyun</id>    
+		<name>nexus-aliyun</name>  
+		<url>http://maven.aliyun.com/nexus/content/groups/public</url>    
+		<mirrorOf>central</mirrorOf>      
+	</mirror> 
+	<!-- 备用mirror -->
+	<mirror>    
+		<id>CN</id>    
+		<name>OSChina Central</name>          
+		<url>http://maven.oschina.net/content/groups/public/</url>    
+		<mirrorOf>central</mirrorOf>    
+	</mirror>  
+  </mirrors>
+
+  <profiles></profiles>
+
+</settings>

@@ -1,0 +1,23 @@
+
+
+tcpdump -i ens32 -w dump.pcap -v 
+
+tcpdump -i ens32 src host 10.1.17.13 -w dump.pcap -v 
+
+
+查询目标ip 和 源主机名
+(ip.dst == 10.30.10.1) && (http.host == "10.1.17.13")
+
+
+
+GET /joint/lodash.min.js HTTP/1.1
+Host: 10.1.17.13
+Accept: application/javascript, */*;q=0.8
+Referer: https://10.1.17.13/credit/dashboard/dbHome
+Accept-Language: zh-CN
+User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko
+Accept-Encoding: gzip, deflate
+Cookie: _td_token_=eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJCN0JBMEZGQjE5MENGNTg1QzI2MDM5QUJBQ0FENzhEQiIsInN1YiI6ImFkbWluIiwiaXNzIjoiZnJhdWRtZXRyaXgiLCJpYXQiOjE1NjA0MTUwODMsImV4cCI6MTU2MTAxOTg4M30.VH0nIFc3BYKMyBL3b1ir-cXjyC21KuMOD-WWpHu189U; _uid_=c693e0ec0a2e4bf8b71eef8152d88a29; _td_account_=admin
+Connection: Keep-alive
+Via: 1.1 ID-0314217270143120 uproxy-3
+CN: 江铃汽车集团财务有限公司[2227]

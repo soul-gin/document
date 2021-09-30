@@ -1,0 +1,248 @@
+
+CPU: 进来指令就执行
+
+一个进程,资源分配的最小单元,相当于运行在电脑中的一个程序;
+一个线程,资源调度的最小单元,是进程中的最小执行单元
+
+创建线程三种方式: Thread Runnable(普通创建,lambda表达式实现) 线程池(其实是前两种的变种实现) 
+
+yield() 让出当前线程执行权限;进入就绪队列(依然有可能继续获得CPU执行权)
+
+join() 当前线程执行时,如果运行到其他线程变量.join()方法,则当前线程会等待join线程执行的结束再运行剩余逻辑
+例,main中起了 t1 t2 t3 ,如何让线程按t3 t2 t1执行? main方法中调用t3.join -> t2.join -> t1.join 或 t1中先调t2.join,t2中先调t3.join
+
+线程状态: new(创建) ready(就绪) Running(运行) Waiting(wait,join,LockSupport.park)/TimedWaiting(sleep(time),wait(time),join(time))(等待) Blocked(阻塞) Terminated(结束,销毁)
+
+中断线程方法:
+1.stop 不建议,会出现该线程中的数据不一致的问题(调用stop线程就销毁了,非正常处理完所有操作后结束,不能确定线程中的数据处理(改变)到什么值了)
+2.interrupt 可以使用,可以唤醒阻塞线程,通过设置线程的中断状态;激活线程(从wait sleep 状态恢复),会抛出异常,需根据业务处理
+3.线程可见的标志位boolean(volite),改变该标志来切换线程状态(while(flage){线程执行})
+
+
+
+synchronized 是可重入锁(同一个类中两个同步方法,方法1调用方法2,如果不能重入就死锁了,锁对象就是线程本身)
+synchronized子类非静态同步方法调用父类非静态方法也能执行,也表示synchronized是可重入
+
+
+多线程含锁线程出现异常时,会主动释放锁,这时候如果不处理,那么其他线程会获得执行权,这时候可能会造成共享数据不一致问题(类似stop,不知道共享变量执行到哪步)
+
+
+
+synchronized(obj)
+当第一个线程过来时: 偏向锁->锁偏向第一个线程(乐观锁,认为不会有并发,并未真正加锁,只是记录了第一个线程对象的id)
+当来了第二个线程,锁升级为自旋锁: 第二个线程默认自动循环等待10次(自己转圈玩),不去竞争锁的权限(这时候第一个线程释放锁,那么第二个线程获取执行权限)
+10次以后,锁升级为重量级锁,这时候,第二个线程就会向cpu申请锁了
+锁只能升级,不能降级,所有会出现synchronized被多个线程竞争后,升级为重量级锁,即便后续只有一个线程执行了,也不知偏向锁,而是重量级锁了
+
+自旋锁,是线程自己循环,不经过linux系统的内核,即无用户态向内核态的切换 ->适合执行时间短,线程少的场景(执行时间长则会导致长时间大量自旋等待;线程太多,几万个锁自旋cpu扛不住)
+执行时间长,线程数量多,用系统锁(synchronized 重量级锁)
+
+注意: synchronized不能使用 String(可能和别人代码同一个锁,出现死锁(不同线程),或重入(同一个线程)问题) Integer(改变值会变成新的对象) Long这些基础数据类型类库 
+
+volatile (英文原意:可变的, 程序意义:1.保证线程可见性,2.禁止指令重排序)
+解决线程之间不可见堆变量,堆中变量值,每个线程栈会从堆中复制一份过来,改变值会同步给堆,但是其他线程不会立即读取,堆也不会通知到其他线程,这时候就需要volatile来处理
+
+双重检查锁,判空的对象是否需要加volatile?
+对象创建时:(关键的三条指令(实际4条,可以看class文件))
+1.申请内存空间 a=0
+2.对象成员变量初始化 a=8
+3.将堆内存地址赋值给栈变量 a -> 地址
+如果出现指令重排序:
+可能执行过程是:
+1. a=0
+2. a->地址
+3. a=8
+
+如果在2执行完后,有新的线程进来获取实例,发现实例有地址了不是null,那么就会直接使用它了;
+而这时候使用的是一个错误的值a=0,而不是我们期望的a=8,即造成数据错误
+所以,双重检查锁,判空的对象需要加volatile
+
+
+使用对象锁,对象属性变更不影响锁的使用,如果对象被指向新地址(new) 那么锁就会失效了
+一般锁对象会在初始化时设置为 final 
+
+
+CAS(Compare And SET(weak弱指针(利于垃圾回收),使用的是 Unsafe类(调用linux系统的cas方法,不可以new,单例获取)), 无锁优化 自旋锁)
+方法: cas(V, Expected, NewValue) 
+if V == Expected
+	V = NewValue
+else
+	其他线程更改过,重试(类似自旋),Expected会改变成刚刚看到的值(!=的值)
+
+cas是cpu原语支持,指令级别,本身是有读写屏障的(同步,串行化执行,不会出现执行过程中,值被其他线程修改)
+Atomic类
+ABA问题:
+线程1: 将 A -> B(线程2先执行,B就不是期望得到的B了)
+线程2: 将 A->B(这里修改了B中的成员变量); 再将B->A
+线程2先执行完,再执行线程1,期望执行失败(这里的B不再是你想要的B(被线程2改了),cas只比对地址,不比对对象属性(女友出轨了,再回来找你,不是以前那个女友了)),但是判断值依然是A,实际会执行成功
+解决方案,使用携带版本号的cas方法,使用version递增来确保数据会按版本修改
+AtomicStampedReference
+主要针对引用变量(改变成员属性值),基础变量Integer这些出现ABA问题也无所谓
+
+数字并发增加
+Synchronized { count++ }
+Atomic 
+LongAdder (分段锁,也是cas操作)
+Segment（分段锁）技术，将数据分成一段一段的存储，然后给每一段数据配一把锁，当一个线程占用锁访问其中一个段数据的时候，其他段的数据也能被其他线程访问，能够实现真正的并发访问
+
+可重入锁
+ReentrantLock (Synchronized是一种可重入锁,同一个对象可以重入同一个对象锁锁定的其他父,子类方法(继承,方法重载),或当前类方法)
+
+Synchronized 自动解锁
+ReentrantLock lock = new ReentrantLock();  (需要try finally, 比Synchronized多的功能:tryLock尝试获取, lockInterruptibly可以打断长时间持有锁,或已经死锁线程)
+lock.lock()
+lock.unlock()
+
+设置可重入锁的参数,是否启用公平锁
+ReentrantLock lock = new ReentrantLock(true);
+公平锁: 新增了等待队列,各线程先到排前面,锁释放则按顺序执行;后来线程不会在锁释放后加入竞争,而是检查队列中是否有人排队,如果有接着排在队列后面,否则可以去竞争)
+
+
+等待线程结束,类似join
+CountDownLatch
+CountDownLatch latch = new CountDownLatch()
+Thread (() -> {其他业务; latch.countDown();})
+latch.await() 等待结束
+
+
+遗传算法(分阶段栅栏,每个阶段的线程执行完成后,各个线程才会统一进入到下个阶段)
+Phaser phaser = new Phaser();
+
+
+ReadWriteLock
+共享锁,排它锁 (读共享,写排他)
+
+ReadWriteLock readWriteLock = new ReentrantReadWriteLock()
+Lock readLock = readWriteLock.readLock();
+Lock writeLock = readWriteLock.writeLock();
+只有读的情况下,可以读并发
+出现读的情况下,会锁住对应数据,不允许并发
+
+
+Semaphore 信号灯,限流(买票,类似车道和收费站)
+Semaphore s = new Semaphore(1);
+s.acquire() 持有锁信号,使得信号new的1变成0
+s.release() 释放锁信号,将信号再变成1
+
+注意: 
+new Semaphore(数字为多少,就有多少个锁,即允许多少个线程并发)
+例: new Semaphore(2)就可以有2个线程同时获得执行权限
+
+
+锁的实现基本都继承了AbstractQueuedSynchronizer,这个抽象类例实现了队列
+
+
+
+Exchanger 交换器,两线程间执行交换数据
+
+Exchanger<String> exchanger = new Exchanger();
+
+String s = "T1";
+s = exchanger.exchange(s);  //阻塞方法,会等待第二个线程执行exchange,这时候两个线程交换数据,再继续执行下去
+
+
+
+乐观锁(cas),悲观锁(synchronized,Lock),自旋锁(cas),读写锁(排它锁,共享锁),分段锁(ConcurrentHashMap)
+
+
+
+
+
+
+
+
+
+spring 是一个轻量级的控制反转(Ioc/di; Inversion of Controll/dependency injection)和面向切面编程(AOP; Aspect Oriented Programming)的对象容器框架
+特点:
+方便解耦,简化开发
+AOP编程支持
+声明式事务的支持
+方便程序的测试
+方便集成各种优秀框架
+
+
+默认scope=singleton, 可设置为 prototype (request针对单次请求, session单次会话, global session 可以认为是特殊功能的多例)
+
+
+三层架构:MVC Controller->URL映射管理; Model->Service处理业务逻辑,DAO查询数据; VIEW->展示页面供客户直观查看数据(jsp,png,avi)
+ssm之前(struts,struts2),Controller Model(Service)均为多例,消耗资源
+ssm之后,Controller为单例, Model(service dao单例), VIEW(单例)
+
+为什么使用单例:
+性能好,节约资源,无需大量创建销毁新对象
+存在并发安全问题,成员变量数据不安全(一般通过线程的ThreadLocal来隔离各个用户不同的数据)
+JDBC的Connection是单例的,所有conn.connect(), conn.close()这些数据库操作需要放在每个线程的ThreadLocal中
+
+
+Spring托管对象循环引用问题
+A->B->C->A
+(循环引用在jvm为引用计数器情况下无法垃圾回收,在gcRoot引用判断解决了循环引用问题)
+单例模式允许
+多例模式不允许,自行代码new实现(spring框架不支持)
+
+Spring单例模式的对象,在spring中直接实例化(先new A;再new B;再new C; 最后进行对象中引用对象的set设置)
+prototype的会检查引用,如果有引用对象没被实例化,暂停实例化,去实例化引用对象(这种策略就是为了避免多例循环引用)
+
+
+弱引用依赖
+bean中添加depends-on属性
+比如A类依赖B类初始化后的成员属性,那么A需要depends-on先初始化B类
+
+
+是否懒加载:
+lazy-init = true/false
+
+使用spring工厂
+1.创建工厂类
+2,创建对象,通过factory-bean来引入工厂,factory-method指定工厂方法;使用constructor-arg指定方法入参
+
+
+动态工厂
+
+静态工厂
+
+@Autowired，@Qualifier
+@Autowired只按照类型注入，如果想按照名称注入，配合@Qualifier使用
+@Autowired
+@Qualifier("studentDao")
+
+如果同时指定了name和type，则从Spring上下文中找到唯一匹配的bean进行装配，找不到则抛出异常
+@Resource(name = "studentDao",type = StudentDao.class)
+
+如果指定了name，则从上下文中查找名称（id）匹配的bean进行装配，找不到则抛出异常
+@Resource(name = "studentDao")
+ 
+如果指定了type，则从上下文中找到类型匹配的唯一bean进行装配，找不到或者找到多个，都会抛出异常
+@Resource(type = StudentDao.class)
+
+如果既没有指定name，又没有指定type，则自动按照byName方式进行装配；如果没有匹配，则回退为一个原始类型进行匹配，如果匹配则自动装配；
+@Resource
+
+
+
+静态代理:(面向接口,创建代理类,持有被代理对象;增强的方法需要写在代理类中)
+被代理类,代理类实现同一个方法接口;
+代理类构造方法,持有被代理类对象
+代理类覆写接口方法,调用被代理类方法,并做相应的增强
+
+动态代理:(不由我们手动创建代理类,而是通过反射(ASM)来自动生成代理类)
+jdk动态代理(共同接口) -> 面向接口 -> 不需要代理类,通过反射来增强,更灵活
+cglib(不能是final类) ->  面向继承(不需要接口,更加灵活) -> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

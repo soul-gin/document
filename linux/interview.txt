@@ -1,0 +1,41 @@
+
+https://pan.baidu.com/s/1lZSqOuW9F_5_339i-sV8hA
+tste
+
+
+https://pan.baidu.com/s/17jEw5wgfY4k1ryNBzcI7YA
+vhjk 
+
+
+
+hashmap遍历方式
+map.keySet()
+Map.Entry
+map.values()
+
+dump查询
+jmap -dump:format=b,file=文件名 [pid]
+JVisualVM .hprof
+
+查询时使用锁
+for update wait 5
+for update 仅适用于InnoDB，并且必须开启事务，在begin与commit之间才生效。
+明确指定主键，并且有此记录，行级锁
+明确指定主键/索引，若查无此记录，无锁
+
+
+springboot源码
+
+redis同步策略(主 从)
+
+mysql执行ddl时如何做到不影响查询
+
+lock锁的等待时长可设置
+
+lock 和 synchronized区别
+
+mybatis使用threadlocal做了什么
+
+zookeeper节点,分布式锁
+
+spring ioc的过程

@@ -1,0 +1,123 @@
+
+使用 location 匹配网站域名(或端口)后,要执行的配置段URI
+~ 表示区分大小写
+~* 表示不区分大小写
+! 取反
+^~ 表示在常规的字符串匹配之后,不做正则表达式的检查(即优先于正则匹配表达式匹配结果生效)
+= 表示精确匹配(优先匹配,同样的路径(location 的 URI),有=的优先匹配)
+
+
+匹配顺序
+1. location = /    (精确匹配 = )
+2. location ^~ /路径/    (匹配常规字符串,不做正则匹配检查)
+3. location ~* \.(jpg|jpeg|gif|png|ico|css|js|pdf|txt|svg)    (正则匹配)
+4. location /路径/    (匹配常规字符串,如果有正则匹配上,那么优先匹配正则)
+5. location /    (所有location都不匹配后,默认匹配)
+
+
+1.修改nginx.conf配置为
+
+worker_processes  1;
+# 错误日志
+error_log logs/error.log;
+events {
+    worker_connections  1024;
+}
+http {
+	# 日志格式 main就相当于一个变量
+	# remote_addr 客户端ip地址, remote_user 远程客户用户名称, 
+	# time_local 访问时间, request 请求方式(GET POST), status 状态码,
+	# body_bytes_sent 请求大小, http_referer 请求来源(防盗可用),从哪个地址跳转过来,
+	# http_user_agent 客户端信息(浏览器软件,设备类型), http_x_forwarded_for 反向代理时,记录客户端ip
+	# 如果访问量比较大,可以配置缓存buffer,定时刷新到磁盘(这样异常情况可能丢失,需要权衡配置)
+	# 另,需要根据时间来切割 access_log,可以使用sh脚本来切割(同时需要linux配置定时任务来每日凌晨对日志进行切割)
+	log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+	# 访问日志 使用 main 这个变量定义的格式,一般都放置在对应的server,不要放置在http节点(不利于管理)
+    # access_log  logs/access.log  main;
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+	# 注意include的路径是相对于conf文件夹的
+	include extra/*/*.conf;
+}
+
+
+2. 准备素材
+	mkdir /home/mw/nginx/conf/extra/location -p
+	
+	配置linux的hosts来模拟域名解析
+	vim /etc/hosts
+	192.168.25.161 www.nier.com bbs.nier.com status.nier.com location.nier.com nier.com
+	将 域名 映射成本机ip
+	
+	注意EOF后面不要加 ; 避免无法识别结束符
+cat >>/home/mw/nginx/conf/extra/location/location.conf<<EOF
+# location
+server {
+        listen       80;
+        server_name  location.nier.com;
+        location / {
+            return 401;
+        }
+		
+		location /document/ {
+            return 402;
+        }
+		
+		location ^~ /images/ {
+            return 403;
+        }
+		
+		location ~* \.(jpg|jpeg|gif|png|ico|css|js|pdf|txt|svg) {
+            return 404;
+        }
+}
+EOF
+
+
+
+
+	
+3.检查配置是否正确后重启(nginx访问量大,配置信息加载在内存中,不可能每次都要去读取磁盘)
+	重启前检查配置是否正确
+	/home/mw/nginx/sbin/nginx -t
+	显示如下表示正常
+nginx: the configuration file /home/mw/nginx-1.15.5/conf/nginx.conf syntax is ok
+nginx: configuration file /home/mw/nginx-1.15.5/conf/nginx.conf test is successful
+
+	重新加载
+	/home/mw/nginx/sbin/nginx -s reload
+	
+	查看nginx是否启动了这些端口(80端口)
+	netstat -lntup|grep nginx
+
+4.linux测试
+	直接获取请求状态码
+	curl -s -o /dev/null -I -w "%{http_code}\n" http://location.nier.com  
+	401
+	
+	curl -s -o /dev/null -I -w "%{http_code}\n" http://location.nier.com/document/1.jpg
+	404
+	
+	curl -s -o /dev/null -I -w "%{http_code}\n" http://location.nier.com/images/1.jpg
+	403
+	
+	
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+
+

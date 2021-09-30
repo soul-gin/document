@@ -1,0 +1,418 @@
+
+nginx集群一般能支持200W左右的并发
+
+查看当前操作系统发行版信息
+cat /etc/redhat-release
+
+列出系统服务是否运行了nginx
+ps -ef|grep nginx
+
+查找是否安装过
+find / -name nginx
+
+卸载
+yum remove nginx
+
+
+添加nginx使用的用户(也可以使用nginx作为用户名,不过一般一个用户会装多个中间件,会使用通用名称)
+(使用有sudo权限用户或直接 su root)
+groupadd admin;
+useradd -g admin admin;
+
+chmod +w /etc/sudoers
+vim /etc/sudoers
+在文件最后添加如下内容：
+# add privilege for admin
+
+admin ALL=(ALL) ALL
+
+# end
+
+1.由于nginx是c语言编写的,不能跨平台,开发者提供的是nginx的源代码
+	注意:下面的环境如果不确定是否安装了,可以直接执行 yum install 命令,省心(推荐)
+	yum install -y gcc-c++ pcre pcre-devel openssl openssl-devel zlib zlib-devel
+	(没有则会安装,有会检查是否最新,不是则会更新)
+	
+	--> 安装gcc环境(用于编译源代码)
+		rpm -qa|grep gcc-c++ 检查是否安装了gcc-c++
+		在线安装gcc
+		yum install -y gcc-c++
+		离线安装(参考: https://blog.csdn.net/White_Black007/article/details/81357234)
+		查看当前操作系统发行版信息
+		cat /etc/redhat-release
+		查看系统版本
+		cat /proc/version
+		说明：在root用户下执行
+		如果在非连网下安装linux系统安装，则需要安装gcc相关的rpm，否则安装nginx会报错。
+		查看当前操作系统发行版信息
+		cat /etc/redhat-release
+		查看系统版本
+		cat /proc/version
+		然后去下载对应版本的ISO镜像(https://www.centos.org/download/),
+		再解压ISO镜像，去里面找gcc，gcc-c++缺少的安装包,一般在Packages目录下面
+		建议先一个个安装,找到缺少的包后保存到一个文件夹下,以后方便其他系统离线安装
+		之后就可以将上面找到的依赖rpm包解压到离线系统,然后强制安装所有 rpm 包
+		rpm -Uvh *.rpm --nodeps --force
+		
+		su root
+		rpm -ivh libstdc++-devel-4.8.5-4.el7.x86_64.rpm
+		rpm -ivh gcc-c++-4.8.5-4.el7.x86_64.rpm
+		rpm -ivh gcc-4.8.5-4.el7.x86_64.rpm
+		(说明：三个控件需要对应系统版本)
+		
+	--> 安装第三方开发包 给nginx运行 提供运行环境
+		perl库,包括perl兼容的正则表达式库
+		rpm -qa|grep pcre 检查是否安装了 pcre-devel(一般pcre-7.8-7.el6.x86_64已安装)
+		那么需要安装pcre-devel
+		
+		在线安装pcre
+		yum install -y pcre pcre-devel
+		
+		nginx安装时使用的是pcre库的解压包
+		cd /home/admin/softwares/nginx_dependency
+		tar -zxvf pcre-8.21.tar.gz
+		然后在nginx进行make时,指定解压包的路径即可
+		--with-pcre=/home/admin/software/nginx_dependency/pcre-8.21 \
+		
+		离线安装pcre
+		cd /home/admin/software
+		tar -zxvf pcre-8.21.tar.gz
+		cd pcre-8.21
+		./configure --prefix=/home/admin/mw/pcre
+		make
+		make install
+		
+		nginx使用的是zlib库,对http包的内容进行gzip
+		在线安装zlib
+		yum install -y zlib zlib-devel
+		
+		nginx安装时使用的是zlib库的解压包
+		cd /home/admin/softwares/nginx_dependency
+		tar -zxvf zlib-1.2.8.tar.gz
+		然后在nginx进行make时,指定解压包的路径即可
+		--with-zlib=/home/admin/software/nginx_dependency/zlib-1.2.8 \
+		
+		
+		离线安装zlib
+		cd /home/admin/softwares/nginx
+		tar -zxvf zlib-1.2.8.tar.gz
+		cd zlib-1.2.8
+		./configure --prefix=/home/admin/mw/zlib
+		make
+		make install
+		
+		openssl强大的安全套接字层密码库,攘括密码算法,密钥,证书封装管理功能及SSL协议
+		rpm -qa|grep openssl-devel 检查是否安装了 openssl-devel
+		
+		在线安装openssl
+		yum install -y openssl openssl-devel
+		
+		nginx安装时使用的是openssl库的解压包
+		cd /home/admin/softwares/nginx_dependency
+		tar -xvzf openssl-1.0.1e.tar.gz
+		然后在nginx进行make时,指定解压包的路径即可
+		--with-openssl=/home/admin/software/nginx_dependency/openssl-1.0.1e \
+		
+		离线安装openssl
+		cd /home/admin/softwares/nginx
+		tar -xvzf openssl-1.0.1e.tar.gz
+		cd openssl-1.0.1e
+		./config --prefix=/home/admin/mw/openssl
+		make
+		make install
+		
+		如果出现下列错误:
+		POD document had syntax errors at /usr/bin/pod2man line 69.
+		make: *** [install_docs] Error 1
+
+		解决方法： 
+		执行：
+		rm -f /usr/bin/pod2man 
+		
+		
+		最后确认安装环境信息是否完整
+		rpm -qa gcc-c++ pcre pcre-devel openssl openssl-devel zlib zlib-devel
+		
+	--> 如果不能联网,那么需要rpm包安装
+	匹配nginx-1.15.5.tar.gz版本的依赖包版本
+Package gcc-c++-4.8.5-39.el7.x86_64 already installed and latest version
+Package pcre-8.32-17.el7.x86_64 already installed and latest version
+Package pcre-devel-8.32-17.el7.x86_64 already installed and latest version
+Package 1:openssl-1.0.2k-19.el7.x86_64 already installed and latest version
+Package 1:openssl-devel-1.0.2k-19.el7.x86_64 already installed and latest version
+Package zlib-1.2.7-18.el7.x86_64 already installed and latest version
+Package zlib-devel-1.2.7-18.el7.x86_64 already installed and latest version
+
+		
+2.安装nginx
+	安装包目录,解压暂存文件目录(安装包上传到这)
+	mkdir -p /home/admin/softwares
+	实际安装目录
+	mkdir -p /home/admin/mw/nginx-1.15.5
+	cd /home/admin/softwares
+	从官网下载nginx压缩包 或者直接上传
+	wget -q http://nginx.org/download/nginx-1.15.5.tar.gz
+	注意:这里是解压到softwares目录,然后安装目录在后面的configure中指定
+	(两个目录不要重复了,会安装失败!!!)
+	tar zxvf /home/admin/softwares/nginx-1.15.5.tar.gz -C /home/admin/softwares/
+	安装tree指令,可查看文件结构树
+	yum install -y tree
+	tree /home/admin/softwares/nginx-1.15.5 --charset ASCII
+	如果嫌 --charset ASCII麻烦,可以使用别名
+	alias tree='tree --charset ASCII'  (重启失效)
+	定义别名永久生效:
+	全局生效(修改 vi /etc/profile,将 alias tree='tree --charset ASCII' 加入即可)
+	source /etc/profile
+	
+	查看编译安装可用参数
+	/home/softwares/nginx-1.15.5/configure --help
+	然后执行下面命令( \ 代表换行),会生成一个Makefile文件
+	(如果想要更安全,可以建立虚拟用户,让nginx使用: useradd nginx -s /sbin/nologin -M;  可以使用 id nginx检查刚创建的用户)
+
+yum三方包安装:	
+./configure \
+--prefix=/home/admin/mw/nginx-1.15.5 \
+--user=admin \
+--group=admin \
+--with-http_gzip_static_module \
+--with-http_ssl_module \
+--with-http_stub_status_module
+
+./configure \
+--prefix=/home/app/mw/nginx \
+--user=app \
+--group=app \
+--with-http_gzip_static_module \
+--with-http_ssl_module \
+--with-http_stub_status_module
+
+离线安装指定目录:
+./configure \
+--prefix=/home/admin/mw/nginx-1.15.5 \
+--user=admin \
+--group=admin \
+--with-pcre=/home/admin/software/nginx_dependency/pcre-8.21 \
+--with-zlib=/home/admin/software/nginx_dependency/zlib-1.2.8 \
+--with-openssl=/home/admin/software/nginx_dependency/openssl-1.0.1e \
+--with-http_gzip_static_module \
+--with-http_ssl_module \
+--with-http_stub_status_module
+	
+	使用 echo $?  查看是否有报错信息,显示 0 表示没有
+	
+	执行完毕后(查看是否多了个Makefile文件)
+	ll (或ls)
+	
+	编译
+	make
+	
+	安装
+	make install
+	
+	设置软连接,方便平时查看和使用(安装目录需要带版本号以便直观了解版本信息,但是不方便tab操作输入名称)
+	cd /home/admin/mw/
+	注意:只有设置了软连接时conf的配置才不需要带版本号(建议绝对路径,阅读麻烦,但是不容易出错)
+	ln -s /home/admin/mw/nginx-1.15.5 /home/admin/mw/nginx
+	
+	/home/admin/mw/nginx就相当于/home/admin/mw/nginx-1.15.5的一个快捷方式,便于查看
+	
+	
+3.启动nginx(注意,涉及端口安全,需要root权限用户启动)
+	查看版本号,以及安装时的 ./configure 参数
+	/home/admin/mw/nginx/sbin/nginx -V
+	启动
+	sudo /home/admin/mw/nginx/sbin/nginx
+	查看
+	ps -ef|grep nginx
+	关闭(或者 kill -9 )
+	/home/admin/mw/nginx/sbin/nginx -s stop
+	重启前检查配置是否正确
+	# error_log,pid,access_log /home/admin/mw/nginx/logs/ 下(使用软连接可以不用目录nginx-1.15.5的版本号)
+	# mime.types 在 /home/admin/mw/nginx/conf/ 下
+	/home/admin/mw/nginx/sbin/nginx -t
+	重启
+	/home/admin/mw/nginx/sbin/nginx -s reload
+	查看nginx端口( ss -lntup|grep 80  就可以查看80端口被谁占用了(或lsof -i:80 )
+	ss -lntup|grep nginx
+		显示 ( tcp  LISTEN  0  128   *:80   *:*      users:(("nginx",81156,6),("nginx",81171,6)) )
+	查看nginx端口是否可以访问(server listen 配置的端口)
+	curl 127.0.0.1:80 (默认端口,根据配置实际情况改)
+		显示nginx欢迎页面.html就是成功了
+	#查看防火墙状态	
+	sudo systemctl status firewalld 
+	#关闭防火墙	
+	sudo systemctl stop firewalld
+	#关闭开机自动启动防火墙功能
+	sudo systemctl disable firewalld  
+	
+4.nginx部署
+	cd /home/admin/mw/nginx/
+	了解nginx目录结构
+	ls -l
+	可以看到一些以 _temp 结尾的目录,是一些临时文件存放的地方
+	
+	查看目录,过滤掉名称中含有temp的文件
+	ls -l|grep -v temp
+	可以看到 conf(配置文件)  html(默认网站目录)  logs(日志,pid)  sbin(启动命令) 四个文件夹
+	
+	查看nginx.conf配置中和root相关的,可以发现 root 是html文件夹(是个相对路径,相对于nginx的安装路径)
+	grep root /home/admin/mw/nginx/conf/nginx.conf
+
+	查看和 80 端口相关的信息
+	lsof -i :80
+	
+	查看nginx.conf详细配置
+	less /home/admin/mw/nginx/conf/nginx.conf
+	最小化配置文件(删除注释,便于查看,修改) 去除包含 # 的行,以及 ^(表示空行)
+	将nginx.conf.default去除#行和空行后的结果输出到nginx.conf
+	egrep -v "#|^$" /home/admin/mw/nginx/conf/nginx.conf.default >nginx.conf
+
+注意: 第一个EOF周围添加'EOF'或者"EOF"防止变量被解析
+(使用cat直接覆盖需要注意对应版本,不同版本配置可能不同!!!)
+
+cat > /home/admin/mw/nginx/conf/nginx.conf<<'EOF'	
+
+# 配置work进程数,一般配置和CPU核心数相等
+# 最懒配置,直接系统自动适配
+# worker_processes auto;
+worker_processes  1;
+# 记录错误日志
+error_log  logs/error.log;
+# 管理进程,有问题就可以直接杀pid
+pid        logs/nginx.pid;
+# 每个work的最大连接数,可以同时处理多少请求(那总的最大连接数就是 worker_processes * worker_connections)	
+events {
+    worker_connections  1024;
+}
+	
+http {
+	# 日志格式
+	log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+	# 日志路径
+    access_log  /home/admin/mw/nginx/logs/access.log  main;
+
+	# nginx支持的媒体类型库文件包含:    mime 类型
+    include       mime.types;
+	# 默认媒体类型类型
+    default_type  application/octet-stream;
+
+	# 是否开启高效文件传输
+    sendfile        on;
+	# 连接超时时间
+    keepalive_timeout  65;
+	
+	# 可选配优化项 begin
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+	gzip on;
+    gzip_min_length  5k;
+    gzip_buffers     4 16k;
+    gzip_comp_level 3;
+    gzip_types       text/plain application/x-javascript text/css application/xml text/javascript application/x-httpd-php image/jpeg image/gif image/png;
+    gzip_vary on;
+	# 可选配优化项 end
+	
+	# 用于配置负载均衡 可选 begin
+    upstream  testLoadBalancing {
+	  # 配置可以负载的服务器ip和port
+      server   192.168.25.11:8080;
+      #server   192.168.25.12:8080;
+      #server   192.168.25.13:8080;
+    }
+	# 用于配置负载均衡 可选 end
+
+
+	# 一个server标签就是一个独立的虚拟主机站点
+    server {
+		# 监听的端口号(提供服务的端口号)
+        listen       80;
+		# 提供服务的域名 主机名 或 IP
+        server_name  localhost;
+		# 请求寻址( / 表示匹配所有请求)
+        location / {
+			# 站点目录,相对于nginx的安装目录(一般存放静态资源文件)
+            root   html;
+			# 默认的首页文件,多个用空格分开
+            index  index.html index.htm;
+        }
+
+		#出现对应的http状态码使用50x.html回馈
+        error_page   500 502 503 504  /50x.html;
+		# 使用 = 会优先匹配,优先于 / 的匹配
+        location = /50x.html {
+			#指定对应的站点目录是名为html文件夹(相对路径,相对nginx)
+            root   html;
+        } 
+
+		# 请求转发,针对负载均衡 可选 begin
+		# 负载均衡需要配置的映射关系,针对mappingURI(对应访问的URI)匹配中,
+		# 则进入proxy_pass这个代理,并使用 testLoadBalancing 的负载配置处理这个请求
+		location ^~ /mappingURI/ {
+			#实际请求地址就是 http://192.168.25.11:8080/mappingURI/跟在mappingURI后面的URI和参数
+            proxy_pass http://testLoadBalancing/mappingURI/;
+        }
+		# 请求转发,针对负载均衡 可选 begin
+    }
+}
+
+EOF
+
+查看配置
+cat /home/admin/mw/nginx/conf/nginx.conf	
+	
+
+样例:
+配置负载均衡	
+upstream  uniteApi {
+  server   10.57.17.184:7070;
+  #server   10.57.17.185:7070;
+  #server   10.57.17.186:7070;
+}
+	
+拦截 ip:port/preCredit 	路径的所有请求
+location ^~ /preCredit/ {
+	# 实际转发的请求地址是 http://10.57.17.184:7070/preCredit/ 开启负载就是负载中任意一个ip:port
+	proxy_pass http://uniteApi/preCredit/;
+}	
+	
+http://10.57.17.184:8088/preCredit/getPreCreditResult?pageSize=1&curPage=1
+就会变成	
+http://10.57.17.184:7070/preCredit/getPreCreditResult?pageSize=1&curPage=1	
+	
+	
+	
+
+移除rpm包	
+yum remove gcc-c++	
+
+仅仅下载rpm包
+yum -y install gcc --downloadonly --downloaddir /home/download/	
+
+查询
+rpm -qa|grep gcc-c++
+rpm -qa|grep libstdc++	
+rpm -qa|grep libstdc++-devel	
+
+更新rpm包至新版本
+sudo rpm -Uvh libstdc++-4.8.5-16.el7_4.1.x86_64.rpm
+sudo rpm -Uvh libstdc++-devel-4.8.5-16.el7_4.1.x86_64.rpm
+sudo rpm -Uvh gcc-c++-4.8.5-16.el7_4.1.x86_64.rpm
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+	

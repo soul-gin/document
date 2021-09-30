@@ -1,0 +1,117 @@
+
+使用 rewrite 语法(与别名区别,别名效率高,但是看到的是原来的地址,301rewrite两次请求效率低,但是可以看到跳转到的域名)
+(一般企业换域名,为了避免老用户不能用,并为了让老用户记住新域名,还是更倾向于使用301rewrite)
+rewrite regex replacement[flag]; (regex 正则表达式(匹配什么), replacement 想被替换成什么, flag标志)
+默认值:none
+应用位置:server location if
+
+例:
+rewrite ^/(.*) http://www.nier.com/$1 permanent;
+
+^ 表示以什么开头
+^/(.*) 表示 / 开头,后面任意数据(nginx匹配的是域名或者端口后面的数据,那么这段正则表示匹配所有)
+$1 表示取(.*)里面的内容
+permanent 表示永久301重定向标记
+
+
+1.修改nginx.conf配置为
+
+worker_processes  1;
+# 错误日志
+error_log logs/error.log;
+events {
+    worker_connections  1024;
+}
+http {
+	# 日志格式 main就相当于一个变量
+	# remote_addr 客户端ip地址, remote_user 远程客户用户名称, 
+	# time_local 访问时间, request 请求方式(GET POST), status 状态码,
+	# body_bytes_sent 请求大小, http_referer 请求来源(防盗可用),从哪个地址跳转过来,
+	# http_user_agent 客户端信息(浏览器软件,设备类型), http_x_forwarded_for 反向代理时,记录客户端ip
+	# 如果访问量比较大,可以配置缓存buffer,定时刷新到磁盘(这样异常情况可能丢失,需要权衡配置)
+	# 另,需要根据时间来切割 access_log,可以使用sh脚本来切割(同时需要linux配置定时任务来每日凌晨对日志进行切割)
+	log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+	# 访问日志 使用 main 这个变量定义的格式,一般都放置在对应的server,不要放置在http节点(不利于管理)
+    # access_log  logs/access.log  main;
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+	# 注意include的路径是相对于conf文件夹的
+	include extra/*/*.conf;
+}
+
+
+2. 准备素材
+	mkdir /home/mw/nginx/conf/extra/www -p
+	
+	配置linux的hosts来模拟域名解析
+	vim /etc/hosts
+	192.168.25.161 www.nier.com bbs.nier.com status.nier.com location.nier.com nier.com
+	将 域名 映射成本机ip
+	
+
+echo "
+server {
+        listen       80;
+        server_name  bbs.nier.com;
+		
+		location / {
+            root   html/bbs;
+            index  index.html index.htm;
+        }
+		
+        location ^~ /test/ {
+            rewrite ^/(.*) http://192.168.25.161/$1 permanent;
+			access_log logs/access_bbs.log main;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+}
+" > /home/mw/nginx/conf/extra/bbs/bbs.conf;
+
+注意!!!
+编辑完成,需要查看下 $1 是否存在
+less /home/mw/nginx/conf/extra/bbs/bbs.conf
+
+
+
+	
+3.检查配置是否正确后重启(nginx访问量大,配置信息加载在内存中,不可能每次都要去读取磁盘)
+	重启前检查配置是否正确
+	/home/mw/nginx/sbin/nginx -t
+	显示如下表示正常
+nginx: the configuration file /home/mw/nginx-1.15.5/conf/nginx.conf syntax is ok
+nginx: configuration file /home/mw/nginx-1.15.5/conf/nginx.conf test is successful
+
+	重新加载
+	/home/mw/nginx/sbin/nginx -s reload
+	
+	查看nginx是否启动了这些端口(80端口)
+	netstat -lntup|grep nginx
+
+4. windows测试(在linux上部署下 java8-1.0.war 可以看到返回结果)
+	bbs.nier.com/test/ok
+	bbs.nier.com/
+	
+	
+	
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+
+

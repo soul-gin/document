@@ -1,0 +1,152 @@
+本安装适用2.16.0.2(其他版本可以参考)
+1.选择x64的版本
+2.安装路径 :  D:\Program\Git
+3.勾选Windows Explorer intergration(Git Bash Here必选(命令行模式),
+	Git GUI Here如果不使用它的图形化界面可以不选,比如使用小乌龟,或者默认安装,将注册表右键选项删除)
+	--> 勾选Git LFS
+	--> 勾选Associate .git*  .sh
+4.don`t create a start Menu folder
+5.Use Notepad++ as Git's default editor
+6.Use Git from Git Bash only
+7.Use the OpenSSL library
+8.Checkout Windows-style,commit Unix-style line endings
+9.Use MinTTY(the default terminal of MSYS2)
+10.勾选
+	--> Enable file system caching
+	--> Enable Git Credential Manager
+	
+	
+Git Bash Here ,Git GUI Here	的删除右键选项
+	--> cdm  regedit
+	--> HKEY_CLASSES_ROOT，并点HKEY_CLASSES_ROOT前面的小三角；找到Directory，点击前面的小三角；
+		找到Background，点击前面的小三角；打开shell，可以看到git_gui和git_shell;删除这两项即可。
+
+
+1.Git的使用
+	在用户主目录下，看看有没有.ssh目录，如果有，再看看这个目录下有没有id_rsa和id_rsa.pub这两个文件，
+	如果有的话，直接跳过此如下命令，如果没有的话，打开命令行，输入如下命令：	
+	创建远程账户(在git Bash 中输入,右键空白处显示)
+	--> ssh-keygen -t rsa –C "yunuotianming@163.com"
+		Windows下打开Git Bash，创建SSH Key，按提示输入密码，可以不填密码一路回车
+		
+	--> $ start ~/.ssh/id_rsa.pub
+		获取key，打开.ssh下的id_rsa.pub文件，里面的内容就是key的内容
+		
+	--> 登录GitHub，打开"SSH Keys"页面，快捷地址：https://github.com/settings/ssh 
+		setting中的SSH keys 点击add SSH KEY; Title 任意 ; Key为id_rsa.pub文件里面的内容
+		
+	-->测试ssh key是否成功，使用命令“ssh -T git@github.com”，
+	如果出现You’ve successfully authenticated, but GitHub does not provide shell access 。这就表示已成功连上github。
+	
+	
+	常用命令:
+		--> 从远程克隆一份到本地可以通过git clone  Git支持HTTPS和SSH协议，SSH速度更快
+			git clone git@github.com:yunuotianming/nier.git
+		
+		--> 本地库关联远程库，在本地仓库目录运行命令：
+			git remote add origin git@github.com:yunuotianming/nier.git
+			
+		--> 推送master分支的所有内容(第一次使用加上了-u参数，是推送内容并关联分支。)
+			git push -u origin master
+			推送成功后就可以看到远程和本地的内容一模一样，下次只要本地作了提交，就可以通过命令：
+			git push origin master
+			
+		--> 本地创建文本test.txt，运行:
+			 git add text.txt
+			 git commit -m"添加新文件"
+			 git push origin master
+			 然后就可以在github看到同步了
+			 
+		--> 取回远程主机某个分支的更新，如
+			git pull origin master
+			
+2.Git GUI的使用
+		Create New Repository	在本地创建一个仓库
+		Clone Existing Repository  从远程克隆一个仓库下来,需要ssh链接
+		Open Existing Repository	打开本地的git仓库
+		
+		rescan  重新扫描,检查是否有变化
+		stage changed	状态变化
+		sign off  签名,署名
+		commit  提交(只是提交到本地)
+		push  推送到远程(向远程提交)
+	
+
+	
+3.Git IDEA
+	--> 在idea的settings 中的Version Control的git栏中
+		path to git executable设置git.exe的安装路径
+		test一下,成功即可
+	
+	
+
+
+//命令
+git init
+
+git add src
+
+git commit -m  "first commit"
+
+git remote add origin https://github.com/mw138/TestGit.git
+
+git push  -u origin master
+
+
+
+
+
+git config --list  //查看列表
+
+git config --global user.name  "你的用户名"	  //设置全局用户名
+
+git config --global user.email "你的邮箱"	  //设置全局用户名对应的密码
+
+git rm --cached . -r  //删除之前的添加到add index的代码 恢复到远样。--》原因在于 要添加忽略文件必须要先不提交到index
+
+
+
+
+
+windows配置git SSH服务:
+
+命令行：
+ssh-keygen -t rsa -C "你的邮箱地址"   // 生成密钥并且发送到邮箱
+
+输入密钥的密码： （可以不输入）
+
+生成的密钥在：windows下 C:\Users\ThinkPad\.ssh   
+id_rsa	   ----->私钥
+id_rsa.pub ---->用在公开的密钥
+
+// ignore     匹配规则
+
+*.a       # 忽略所有 .a 结尾的文件
+!lib.a    # 但 lib.a 除外
+/TODO     # 仅仅忽略项目根目录下的 TODO 文件，不包括 subdir/TODO
+build/    # 忽略 build/ 目录下的所有文件
+doc/*.txt # 会忽略 doc/notes.txt 但不包括 doc/server/arch.txt
+
+
+#### 注意： ignore 只能忽略没有被git管理的文件 也就是说没有在add index之前的文件。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+	
+	
+	
+		
+		

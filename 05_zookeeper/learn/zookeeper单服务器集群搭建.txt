@@ -1,0 +1,150 @@
+
+
+注意:
+单服务器,多个zk端口不同;多服务器ip不同,端口可以一致
+
+
+由于zookeeper的投票机制,至少需要3个zookeeper才能搭建集群(超过半数投票才有效3/2 ...1)
+
+1.将zookeeper-3.4.6.tar.gz  (S:\Software_For_vms)  传到/soft下面
+2.解压  
+		cd /soft
+		tar zxf zookeeper-3.4.6.tar.gz 
+3.创建solr-cloud文件夹
+		mkdir /usr/local/solr-cloud
+		cp -r zookeeper-3.4.6 /usr/local/solr-cloud/zookeeper01
+		cp -r zookeeper-3.4.6 /usr/local/solr-cloud/zookeeper02
+		cp -r zookeeper-3.4.6 /usr/local/solr-cloud/zookeeper03
+		cd /usr/local/solr-cloud/
+		ll  ( 查看是否复制成功 )
+		cd /usr/local/solr-cloud/zookeeper01
+		mkdir data   ( 存放数据的文件夹 )
+		
+	
+4.创建一个记录节点的文件
+		cd /usr/local/solr-cloud/zookeeper01/data
+		touch myid
+		vi myid
+		向第一个(zookeeper01)中写一个  1  即可:wq
+		cat myid  (查看是否写好)
+		
+		cd /usr/local/solr-cloud/zookeeper01/conf
+		cp zoo_sample.cfg zoo.cfg
+		vi /usr/local/solr-cloud/zookeeper01/conf/zoo.cfg
+		
+		将dataDir=/tmp/zookeepe 改成新建的data目录
+		dataDir=/usr/local/solr-cloud/zookeeper01/data
+		
+		(但是本机nier上已经有个单机solr和单机zookeeper连接 所以不能从2181开始了)
+		将clientPort=2182修改( 从zookeeper02开始,第一个可以保留 因为在同一个服务器,不同服务器可以不用 )
+		
+		在zoo.cfg文件最末尾加上
+		(每一个文件都需要写这三个配置,使得三个zookeeper可以通讯2881和投票选举3881)
+server.1=192.168.25.128:2882:3882
+server.2=192.168.25.128:2883:3883
+server.3=192.168.25.128:2884:3884
+
+		保存:wq
+		
+5.同理配置其他几个zookeeper
+		mkdir /usr/local/solr-cloud/zookeeper02/data
+		mkdir /usr/local/solr-cloud/zookeeper03/data
+		另一种创建文件方法
+		cd /usr/local/solr-cloud/zookeeper02/data
+		echo 2 >myid
+		cd /usr/local/solr-cloud/zookeeper03/data
+		echo 3 >myid
+		
+		cd /usr/local/solr-cloud/zookeeper02/conf
+		cp zoo_sample.cfg zoo.cfg
+		vi /usr/local/solr-cloud/zookeeper02/conf/zoo.cfg
+		修改下列内容
+			dataDir=/usr/local/solr-cloud/zookeeper02/data
+			clientPort=2183
+		末尾
+server.1=192.168.25.128:2882:3882
+server.2=192.168.25.128:2883:3883
+server.3=192.168.25.128:2884:3884
+	
+		
+		cd /usr/local/solr-cloud/zookeeper03/conf
+		cp zoo_sample.cfg zoo.cfg
+		vi /usr/local/solr-cloud/zookeeper03/conf/zoo.cfg
+		修改下列内容
+			dataDir=/usr/local/solr-cloud/zookeeper03/data
+			clientPort=2184
+		末尾
+server.1=192.168.25.128:2882:3882
+server.2=192.168.25.128:2883:3883
+server.3=192.168.25.128:2884:3884
+
+6.配置批处理 启动,查看,关闭三个zookeeper
+		cd /usr/local/solr-cloud/
+		vi start-all-zookeeper.sh
+		写入下列三句,也可以直接用下面三句启动
+sh /usr/local/solr-cloud/zookeeper01/bin/zkServer.sh start
+sh /usr/local/solr-cloud/zookeeper02/bin/zkServer.sh start
+sh /usr/local/solr-cloud/zookeeper03/bin/zkServer.sh start
+		
+		vi status-all-zookeeper.sh
+		写入下列三句,也可以直接用下面三句查看
+sh /usr/local/solr-cloud/zookeeper01/bin/zkServer.sh status
+sh /usr/local/solr-cloud/zookeeper02/bin/zkServer.sh status
+sh /usr/local/solr-cloud/zookeeper03/bin/zkServer.sh status
+
+
+		vi stop-all-zookeeper.sh
+		写入下列三句,也可以直接用下面三句关闭
+sh /usr/local/solr-cloud/zookeeper01/bin/zkServer.sh stop
+sh /usr/local/solr-cloud/zookeeper02/bin/zkServer.sh stop
+sh /usr/local/solr-cloud/zookeeper03/bin/zkServer.sh stop
+
+
+7.执行  sh status-all-zookeeper.sh  看到下列含有leader 和 follower 即证明搭建成功
+Using config: /usr/local/solr-cloud/zookeeper01/bin/../conf/zoo.cfg
+Mode: follower
+JMX enabled by default
+Using config: /usr/local/solr-cloud/zookeeper02/bin/../conf/zoo.cfg
+Mode: leader
+JMX enabled by default
+Using config: /usr/local/solr-cloud/zookeeper03/bin/../conf/zoo.cfg
+Mode: follower
+
+出现 standalone 说明该项搭建失败
+Using config: /usr/local/solr-cloud/zookeeper01/bin/../conf/zoo.cfg
+Mode: standalone
+
+8.使用批处理控制zookeeper集群
+	启动  sh /usr/local/solr-cloud/start-all-zookeeper.sh
+	查看  sh /usr/local/solr-cloud/status-all-zookeeper.sh
+	关闭  sh /usr/local/solr-cloud/stop-all-zookeeper.sh
+		
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	

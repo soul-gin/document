@@ -1,0 +1,325 @@
+需求: CentOS  JDK  MySql  (先安装以上环境)  MyCat
+
+1.上传mycat(Mycat-server-1.4-release-20151019230038-linux.tar.gz)
+
+2.解压
+	tar -zxf Mycat-server-1.4-release-20151019230038-linux.tar.gz
+	
+  查看解压后出现的mycat文件夹( ll )
+  
+3.拷贝mycat到/usr/local/下面
+	cp mycat /usr/local/ -r
+	
+4.启动
+	查看控制命令有哪些
+	sh /usr/local/mycat/bin/mycat
+	启动mycat
+	sh /usr/local/mycat/bin/mycat console
+	查看日志(需要新建窗口new windows)
+	tail -f /usr/local/mycat/logs/mycat.log
+
+
+
+5.根据业务需求进行  分库分表  数据库分片
+	
+	vi /usr/local/mycat/conf/schema.xml
+	(使用notepad远程连接更方便修改)
+	
+	5.1 
+	将schema名修改为数据库需要分片的数据库名(e3mall-32)
+	将table名修改为数据库需要分片的表名(tb_item)
+	
+<schema name="e3mall-32" checkSQLschema="false" sqlMaxLimit="100">
+	<!-- auto sharding by id (long) -->
+	<table name="tb_item" dataNode="dn1,dn2,dn3" rule="auto-sharding-long" />
+</schema>
+
+	5.2 数据库节点配置(目前test的是一个数据库中分片,实际业务需要多台mysql,
+	那么就会涉及远程连接mysql,需要修改dataHost="localhost2" dataHost="localhost3"
+	再分别配置localhost2 localhost3的<dataHost>标签url,user,password属性,
+	需要复制两份<dataHost></dataHost>标签来修改)
+	
+<dataNode name="dn1" dataHost="localhost1" database="db1" />
+<dataNode name="dn2" dataHost="localhost1" database="db2" />
+<dataNode name="dn3" dataHost="localhost1" database="db3" />
+	
+	同时需要在对应localhost1的url数据库中建立对应的数据库db1 db2 db3
+
+	5.3 修改dataHost属性(根据需要,修改url,user,passwor)
+	(如果有多个远程节点,以下<dataHost></dataHost>标签要复制对应数量份)
+
+<dataHost name="localhost1" maxCon="1000" minCon="10" balance="0"
+	writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+	<heartbeat>select user()</heartbeat>
+	<writeHost host="hostM1" url="localhost:3306" user="root"
+		password="root">
+	</writeHost>
+</dataHost>
+
+6. 修改访问mycat的用户名密码
+	vi /usr/local/mycat/conf/server.xml
+	(使用notepad远程连接更方便修改)
+
+	根据需求修改(name为访问mycat连接的名称,和mysql一样的链接访问
+	passwor 为访问的 密码
+	schemas为schema.xml中配置的<schema name="e3mall-32">的name的值)
+	
+	<user name="mycat">
+		<property name="password">root</property>
+		<property name="schemas">e3mall-32</property>
+	</user>
+
+	<user name="user">
+		<property name="password">root</property>
+		<property name="schemas">e3mall-32</property>
+		<property name="readOnly">true</property>
+	</user>
+	
+7. 启动mycat
+   sh /usr/local/mycat/bin/mycat console
+   查看日志(需要新建窗口new windows)
+   tail -f /usr/local/mycat/logs/mycat.log
+   关闭
+   sh /usr/local/mycat/bin/mycat stop
+   
+   使用数据库连接工具连接mycat,注意mycat的运行端口是8066
+   
+   在复制表格之前最好添加mysql不区分大小写的配置
+   
+
+Linux版本的my.cnf文件,一般会放在/etc/my.cnf或/etc/mysql/my.cnf下;
+Windows下的是my.ini文件,一般会在安装目录的根目录;
+
+但Linux下用rpm包安装的MySQL是不会创建/etc/my.cnf文件;
+至于为什么没有这个文件而MySQL却也能正常启动和作用，在点有两个说法:
+第一种说法,my.cnf只是MySQL启动时的一个参数文件,可以没有它,这时MySQL会用内置的默认参数启动,
+第二种说法,MySQL在启动时自动使用/usr/share/mysql目录下的my-medium.cnf文件,这种说法仅限于rpm包安装的MySQL,
+解决方法:只需要复制一个/usr/share/mysql目录下的.cnf文件到/etc目录，并改名为my.cnf即可。 
+
+在/etc/my.cnf 或 /etc/mysql/my.cnf 中的[mysqld]下面添加添加
+lower_case_table_names=1
+即可
+
+重启MySQL
+service mysql restart
+
+查看mqsql参数
+cd /usr/local/mysql
+mysql -uroot -proot
+show variables like "%case%"; 
+
+应该看到
+ Variable_name          | Value |
++------------------------+-------+
+| lower_case_file_system | OFF  |
+| lower_case_table_names | 1    |
++------------------------+-------+
+
+exit
+
+repair table tb_item;
+
+
+数据库文件默认在：cd /usr/share/mysql
+配置文件默认在：/etc/my.cnf
+
+———————————–
+
+数据库目录：/var/lib/mysql/
+配置文件：/usr/share/mysql(mysql.server命令及配置文件)
+相关命令：/usr/bin(mysqladmin、mysqldump等命令)(*mysql的一种安全启动方式：/usr/bin/mysqld_safe –user=root &)
+启动脚本：/etc/rc.d/init.d/
+
+首先你可以使用以下的命令来寻找MySQL
+[root@stuhome /]# find / -name “mysql” -print
+一般来说mysql是放在/usr/local/mysql/下的。
+然后在其bin目录下有个mysql_config文件，vi之，你会看见这么一句：
+ldata=’/usr/local/mysql/var’
+
+rpm安装默认目录：
+数据文件：/var/lib/mysql/
+配置文件模板：/usr/share/mysql
+mysql客户端工具目录：/usr/bin
+日志目录：/var/log/
+pid，sock文件目录：/tmp/
+
+
+rpm安装(nier是这么安装的,坑啊,如果有数据表有问题
+/var/lib/mysql/ 下面找到对应数据库,并将有问题的表删除)
+
+
+通过mycat实现mysql读写分离
+可以避免刚刚写入的数据就被读取导致的读取的数据和写入数据不一致
+
+
+可以查询哪里有mysql的目录
+whereis mysql
+
+
+Mysql主服务器配置
+第一步：修改my.conf文件：
+在[mysqld]段下添加：
+
+binlog-do-db=db1
+binlog-ignore-db=mysql
+#启用二进制日志
+log-bin=mysql-bin
+#服务器唯一ID，一般取IP最后一段
+server-id=134
+
+第二步：重启mysql服务
+service mysqld restart
+
+第三步：
+cd /usr/local/mysql
+mysql -uroot -proot
+
+建立帐户并授权slave
+mysql>GRANT FILE ON *.* TO 'backup'@'%' IDENTIFIED BY '123456';
+mysql>GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* to 'backup'@'%' identified by '123456'; 
+#一般不用root帐号，“%”表示所有客户端都可能连，只要帐号，密码正确，此处可用具体客户端IP代替，如192.168.145.226，加强安全。
+
+刷新权限
+mysql> FLUSH PRIVILEGES;
+
+第四步：查询master的状态
+mysql> show master status;
++------------------+----------+--------------+------------------+-------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------------+----------+--------------+------------------+-------------------+
+| mysql-bin.000001 |      120 | db1          | mysql            |                   |
++------------------+----------+--------------+------------------+-------------------+
+1 row in set
+
+
+
+Mysql从服务器配置
+第一步：修改my.conf文件
+[mysqld]
+server-id=166
+
+第二步：配置从服务器
+mysql>change master to master_host='192.168.25.134',master_port=3306,master_user='backup',master_password='123456',master_log_file='mysql-bin.000001',master_log_pos=120 
+
+注意语句中间不要断开，master_port为mysql服务器端口号(无引号)，master_user为执行同步操作的数据库账户，“120”无单引号(此处的120就是show master status 中看到的position的值，这里的mysql-bin.000001就是file对应的值)。
+
+第二步：启动从服务器复制功能
+Mysql>start slave; 
+
+第三步：检查从服务器复制功能状态：
+mysql> show slave status
+
+……………………(省略部分)
+Slave_IO_Running: Yes //此状态必须YES
+Slave_SQL_Running: Yes //此状态必须YES
+……………………(省略部分)
+
+注：Slave_IO及Slave_SQL进程必须正常运行，即YES状态，否则都是错误的状态(如：其中一个NO均属错误)。
+
+错误处理：
+如果出现此错误：
+Fatal error: The slave I/O thread stops because master and slave have equal MySQL server UUIDs; these UUIDs must be different for replication to work.
+因为是mysql是克隆的系统所以mysql的uuid是一样的，所以需要修改。
+解决方法：
+删除/var/lib/mysql/auto.cnf文件，重新启动服务。
+
+
+
+Mycat配置
+Mycat 1.4 支持MySQL主从复制状态绑定的读写分离机制，让读更加安全可靠，配置如下：
+	
+<dataNode name="dn1" dataHost="localhost1" database="db1" />
+	<dataNode name="dn2" dataHost="localhost1" database="db2" />
+	<dataNode name="dn3" dataHost="localhost1" database="db3" />
+	<dataHost name="localhost1" maxCon="1000" minCon="10" balance="1"
+		writeType="0" dbType="mysql" dbDriver="native" switchType="2"  slaveThreshold="100">
+		<heartbeat>show slave status</heartbeat>
+		<writeHost host="hostM" url="192.168.25.134:3306" user="root"
+			password="root">
+			<readHost host="hostS" url="192.168.25.166:3306" user="root"
+			password="root" />
+		</writeHost>
+	</dataHost>
+
+
+
+(1)	设置 balance="1"与writeType="0"
+Balance参数设置：
+1. balance=“0”, 所有读操作都发送到当前可用的writeHost上。
+2. balance=“1”，所有读操作都随机的发送到readHost。
+3. balance=“2”，所有读操作都随机的在writeHost、readhost上分发
+WriteType参数设置：
+1. writeType=“0”, 所有写操作都发送到可用的writeHost上。
+2. writeType=“1”，所有写操作都随机的发送到readHost。
+3. writeType=“2”，所有写操作都随机的在writeHost、readhost分上发。
+ “readHost是从属于writeHost的，即意味着它从那个writeHost获取同步数据，因此，当它所属的writeHost宕机了，则它也不会再参与到读写分离中来，即“不工作了”，这是因为此时，它的数据已经“不可靠”了。基于这个考虑，目前mycat 1.3和1.4版本中，若想支持MySQL一主一从的标准配置，并且在主节点宕机的情况下，从节点还能读取数据，则需要在Mycat里配置为两个writeHost并设置banlance=1。”
+(2)	设置 switchType="2" 与slaveThreshold="100"
+switchType 目前有三种选择：
+-1：表示不自动切换
+1 ：默认值，自动切换
+2 ：基于MySQL主从同步的状态决定是否切换
+“Mycat心跳检查语句配置为 show slave status ，dataHost 上定义两个新属性： switchType="2" 与slaveThreshold="100"，此时意味着开启MySQL主从复制状态绑定的读写分离与切换机制。Mycat心跳机制通过检测 show slave status 中的 "Seconds_Behind_Master", "Slave_IO_Running", "Slave_SQL_Running" 三个字段来确定当前主从同步的状态以及Seconds_Behind_Master主从复制时延。“
+
+
+
+
+
+
+
+
+
+
+
+
+1.垂直切割(针对不同系统数据量大的拆分) 也叫分库分表
+	将单个商城数据库 拆分成  用户系统数据库  订单交易系统数据库   支付系统数据库 
+
+2.水平切割(针对单张表 每天数据量很大)
+	将单张表的数据进行水平分割
+		如 用户表: 拆成  用户表1  用户表2  用户表3  用户表4
+		但是如何识别应该 访问哪张表格 才能查询到需要的数据?
+		
+		拆分规则(如果自己通过代码实现):
+			第一种 : 根据主键编号(规定每个表的ID范围)
+			第二种 : 对主键进行hash处理()
+		
+		(通过 数据库中间件 实现 数据库分片)
+		通过mycat实现 数据库分片(水平切割)
+		
+		
+3.基于阿里的Cobar,cobar不更新后,Mycat就诞生了
+	mysql: schema 逻辑库
+		   table  表(物理数据库中的表,但是特殊化的存储了 逻辑数据节点 ,这也就是指定表分片的规则)
+		   (可以分散到不同的DataNode节点进行存储)
+		   DataNode  Mycat的逻辑数据节点,是存放table的具体物理节点,也称之为分片节点
+		   (数据切分后,一个DataNode节点就是一个数据库)
+		   DataSource  定义某个物理库的访问地址,用于捆绑到Datanode上
+		   
+		 
+	mycat
+		支持故障自动切换,高可用性(对集群特别重要的一点)
+		支持读写分离,支持mysql双主多从,一主多从模式
+		支持全局表(字典表),数据自动分片到多个节点,用于高效表关联查询(复制字典表到每一个数据库,以便关联查询)
+		支持独有的基于E-R关系的分片策略,实现了高效的表关联查询
+		多平台支持(java开发,跨平台),部署实施简单
+		
+		 
+	心跳检查 (HeartBeat checker)
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

@@ -1,0 +1,51 @@
+
+linux和windows(cmd),只要有telnet命令,就可以通过下面方式进行排查
+
+1.通过telnet ip port命令登录
+telnet 10.57.17.184 20880
+telnet 10.30.12.2 28886
+telnet 10.30.10.1 28886
+
+2.按回车键,就会跳至dubbo服务
+显示为下列界面:
+dubbo>
+
+3.通过 ls 命令查看提供了哪些服务
+cn.gin.service.PersonInfoService
+
+4.切换到要排查的服务类名下
+cd cn.gin.service.PersonInfoService
+
+5.查看该服务有哪些方法
+ls
+
+显示为:
+getUserLevel
+getUserMoney
+
+6.调用服务进行测试(前提:知道服务参数,这里是 userId 和 password )
+invoke getUserName(100987,123456)
+
+名单测试
+invoke getNameListDefine('xfjr','',1,'')
+
+
+会显示调用结果
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

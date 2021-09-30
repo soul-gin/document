@@ -1,0 +1,31 @@
+
+下载  axis2-1.7.4-bin ,解压,并配置到环境变量中(或使用 soapui,解析wsdl文档地址, 通过https调用)
+
+设置环境变量，加入 AXIS2_HOME=Axis2客户端安装目录，path中追加;%AXIS2_HOME%\bin 
+
+先访问对应的wsdl页面,查看页面源代码
+将源代码中的内容拷贝下来,命名为 resource.xml (或 resource.wsdl)
+
+生成服务端代码,并指定包名,路径
+wsdl2java.bat -uri  D:\document\mynote\axis2\resource.xml  -p cn.test.service -o D:\document\mynote\axis2\test
+
+生成客户端代码,并指定路径
+wsdl2java.bat -uri D:\document\mynote\axis2\resource.xml -d adb -o D:\document\mynote\axis2\test
+
+
+WSDL2Java命令参数说明：
+-uri  指定*.xml *.wsdl文件，可以带具体路径(也可以是网络路径)
+-p  指定生成代码的包名
+-d xmlbeans  使用不同的数据绑定方法;
+-o  指定生成代码放置的路径；
+-ss 表示要生成服务端代码；
+-ssi 表示要生成代码中，先生成接口类，再生成实现类； 
+
+
+
+测试公有客户端代码:
+wsdl2java.bat -uri http://ws.webxml.com.cn/WebServices/MobileCodeWS.asmx?wsdl -d adb -o D:\document\mynote\axis2\test
+
+
+
+

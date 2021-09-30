@@ -1,0 +1,668 @@
+
+oracle安装:(可参考)
+https://oracle-base.com/articles/12c/oracle-db-12cr2-installation-on-oracle-linux-6-and-7
+https://www.jianshu.com/p/cb0a70372631
+https://blog.csdn.net/yabingshi_tech/article/details/46801539
+https://blog.csdn.net/zwl18210851801/article/details/80774980
+
+下载地址:
+oracle安装程序下载:
+http://www.oracle.com/technetwork/database/enterprise-edition/downloads/index.html
+
+win64位(客户端,因之后安装的是64位,所以navicat使用这个客户端,需要找到对应安装版本的包)
+https://www.oracle.com/database/technologies/instant-client/winx64-64-downloads.html
+使用navicat连接,需要点击"菜单栏"的"工具"选项,再点击OCI,
+OCI library中配置对应安装的Oracle的instantclient_1X_2(X对应各个版本)的oci.dll
+
+win32位(plsql只支持32位,所有使用这个客户端,需要找到对应安装版本的包)
+https://www.oracle.com/database/technologies/instant-client/microsoft-windows-32-downloads.html
+(plsql不要登录,点取消,在Tools的Preferences中的Connection中配置Oracle Home(instantclient_1X_2目录)和OCI library(instantclient_1X_2目录下的oci.dll)
+
+(
+注意:连接时"服务名或SID"要看安装的oracle用的是什么,不一定所有安装都是配置的 /orcl 
+(有的配置的cdb1,有的是pdb1,有的是orclpdb),可通过 echo $ORACLE_SID 查看;
+PDB库要通过sql查 select name,open_mode from v$pdbs; 
+用户选择:sys 要选 SYSDBA 用户角色(navicat在高级中选); cdb库pdb库是普通用户; cdb库名前含c##
+)
+
+
+oracle卸载
+登录数据库
+sqlplus / as sysdba
+
+关闭实例(开启 starup)
+shutdown immediate
+
+停止Listener进程
+lsnrctl stop
+
+使用deinstall工具删除安装的Oracle软件的可执行文件和配置文件
+cd $ORACLE_HOME/deinstall
+./deinstall
+
+显示下列信息,直接回车继续
+Specify all Single Instance listeners that are to be de-configured. Enter .(dot) to deselect all. [LISTENER]:
+
+显示下列信息,直接回车继续
+Specify the list of database names that are configured in this Oracle home []:
+Database Check Configuration END
+
+输入 y ,然后回车继续
+Following Single Instance listener(s) will be de-configured: LISTENER
+Checking the config status for CCR
+Oracle Home exists with CCR directory, but CCR is not configured
+CCR check is finished
+Do you want to continue (y - yes, n - no)? [n]: y
+
+最后显示deinstall tool successfully表示deinstall执行完成
+Oracle deinstall tool successfully cleaned up temporary directories.
+
+
+删除/etc目录下的oraInst.loc、oratab，删除/opt目录下的ORCLfmap
+ll /etc | grep ora
+sudo rm -rf /etc/oraInst.loc;sudo rm -rf /etc/oratab;
+ll /etc | grep ora
+
+ll /opt | grep ORCLfmap
+sudo rm -rf /opt/ORCLfmap;
+ll /opt | grep ORCLfmap
+
+
+删除/usr/local/bin下面Oracle的coraenv,dbhome和oraenv
+ll /usr/local/bin
+rm -rf /usr/local/bin/coraenv /usr/local/bin/dbhome /usr/local/bin/oraenv;
+ll /usr/local/bin
+
+
+删除/tmp目录下Oracle的相关文件
+
+谨慎处理方式:
+ll /tmp |grep -E "oracle|deinstall"
+ll /tmp/|grep oracle |awk '{print "rm -rf /tmp/" $9}'|bash;
+ll /tmp |grep -E "oracle|deinstall"
+
+如果 /tmp 确定没有有用的东西,可以直接清空(慎用)
+rm -rf /tmp
+
+删除Oracle安装目录
+echo $ORACLE_HOME
+发现是安装在products
+/data01/db/products/oracle12c
+
+需确认没有其他软件,只有oracle的文件
+ll /data01/db/products/
+
+可看到两个表空间oradata是系统的,atreus是自建的
+drwxr-x-w-. 3 oracle oinstall 17 Oct 11 16:56 atreus
+drwxr-x-w-. 3 oracle oinstall 17 Oct 11 16:56 oradata
+
+删除安装目录(也要注意下 /data01/db 下有没有 oraInventory 文件,有的话也要删除)
+rm -rf /data01/db/products
+确认删除完毕
+ll /data01/db/
+
+最后重启系统即可
+reboot
+强制重启
+sudo systemctl reboot -i
+
+
+
+
+注意一定要选择平台相同的安装包.如果你操作系统是64位的,一定要下64位的安装包.
+(当前安装版本: Oracle Database 12c Release 2)
+注意:用户理论上可以是任意的,但推荐oracle,oinstall组,dba组也建议这两个名称
+groupadd oinstall;groupadd dba;
+useradd -g oinstall -G dba oracle
+
+passwd oracle
+密码为:oracle
+
+sudo chmod +w /etc/sudoers(使用有sudo权限用户或直接 su root)
+sudo vim /etc/sudoers
+在文件最后添加如下内容：
+# add privilege for oracle
+
+oracle ALL=(ALL) ALL
+
+# end
+
+防止被修改
+sudo chmod -w /etc/sudoers
+
+
+如果admin用户也要使用oracle用户中的文件,可以添加次要组,并给oracle用户chmod 775 -R /home/oracle
+usermod -a -G groupname username (把用户添加到这个组，之前所属组不影响)
+用户添加多个次要组
+sudo usermod -a -G oinstall,dba admin
+查看用户信息
+id admin
+
+
+sudo vi /etc/selinux/config
+## 将`SELINUX`修改为permissive,linux检测到安全问题只提示,但是不阻止
+# for oracle 
+
+SELINUX=permissive
+
+#end
+
+执行命令
+setenforce Permissive
+显示
+setenforce: SELinux is disabled
+
+关闭防火墙
+sudo systemctl status firewalld  #查看防火墙状态
+sudo systemctl stop firewalld  #关闭防火墙
+sudo systemctl disable firewalld  #关闭开机自动启动防火墙功能
+
+检查配置是否符合要求
+查看内存(不能小于1G)
+grep MemTotal /proc/meminfo
+
+
+使用一下命令查看交换分区大小：
+grep SwapTotal /proc/meminfo
+
+检查RAM与交换分区之间的要求：
+RAM	需要交换空间的大小
+1 GB和2 GB之间: 		RAM大小的1.5倍
+2 GB和16 GB之间: 		等于RAM的大小
+超过16 GB: 				16 GB
+
+查看Swap分区大小
+free -m
+
+创建block分区(block_size(1024表示1M)、number_of_block(count表示1024个bs大小,即1024M)
+dd if=/dev/zero of=/home/swap bs=1024 count=1024000
+
+如果已经修改过一次，则会报下面这个错误(dd: opening `/home/swap': Text file busy)，
+这时候就必须先关闭swap分区（命令 swapoff -a)，修改完成后再开启swap分区(命令：swapon -a )
+
+接着再把这个分区变成swap分区。
+sudo /sbin/mkswap /home/swap
+	
+再接着使用这个swap分区。使其成为有效状态。
+sudo /sbin/swapon /home/swap
+
+现在再用free -m命令查看一下内存和swap分区大小，
+就发现增加了512M的空间了。不过当计算机重启了以后，发现swap还是原来那么大，新的swap没有自动启动，还要手动启动。
+那我们需要修改/etc/fstab文件，增加如下一行
+sudo vim /etc/fstab
+
+# for oracle swap
+
+/home/swap swap swap defaults 0 0
+
+# end
+
+
+整个安装大概12G,注意安装目录挂载的硬盘容量是否支持
+df -h
+保证/tmp目录只要有1GB可用空间
+df -h /tmp
+
+检查安装包(出现 "未安装" 或 "is not installed",那么需要安装)
+(可选rpm包查询地址: http://www.rpmfind.net/linux/rpm2html/search.php?query=compat-libstdc++-33)
+rpm -q binutils compat-libstdc++-33 elfutils-libelf elfutils-libelf-devel elfutils-libelf-devel-static gcc gcc-c++ glibc glibc-common glibc-devel glibc-headers kernel-headers ksh libaio libaio-devel libgcc libgomp libstdc++ libstdc++-devel make sysstat unixODBC unixODBC-devel
+
+建议直接安装,并更新
+sudo yum install -y binutils compat-libstdc++ elfutils-libelf elfutils-libelf-devel elfutils-libelf-devel-static gcc gcc-c++ glibc glibc-common glibc-devel glibc-headers kernel-headers ksh libaio libaio-devel libgcc libgomp libstdc++ libstdc++-devel make sysstat unixODBC unixODBC-devel
+
+再检验一次(可能有镜像不存在,并没有安装成功,比如compat-libstdc++镜像容易获取失败)
+rpm -q binutils compat-libstdc++-33 elfutils-libelf elfutils-libelf-devel elfutils-libelf-devel-static gcc gcc-c++ glibc glibc-common glibc-devel glibc-headers kernel-headers ksh libaio libaio-devel libgcc libgomp libstdc++ libstdc++-devel make sysstat unixODBC unixODBC-devel
+如果实际已安装(yum install -y显示已是最新,可能包名写错了,使用 rpm -qa | grep "对应包名"查看即可)
+(如 compat-libstdc++-33 包名容易被误以为 compat-libstdc++ 是包名)
+
+在/etc/sysctl.conf文件中，添加(有重复的修改)以下内核参数：
+sudo vi /etc/sysctl.conf
+
+#
+# oracle begin
+#
+
+fs.file-max = 6815744                     #设置一个进程可以打开的最大打开文件数
+fs.aio-max-nr = 1048576                   #限制未完成的并发请求，避免I/O系统故障
+kernel.sem = 250 32000 100 128            #设置的信号量
+kernel.shmmni = 4096                      #整个系统共享内存端的最大数
+kernel.shmall = 1073741824                #共享内存的总量，应不小于shmmax/page_size缺省值就是2097152
+kernel.shmmax = 4398046511104             #最大共享内存的段大小，不小于物理内存的一半
+kernel.panic_on_oops = 1
+# 可使用的IPv4端口范围 local_port_range一般会有
+# 较多人配置 9000 起步,后续关注7000是否有问题(低于1521会使得监听失败,显示为监听端口被占用)
+net.ipv4.ip_local_port_range = 7000 65535 
+net.core.rmem_default = 262144            #默认接收缓冲区大小
+net.core.rmem_max = 4194304               #接收缓冲区最大值
+net.core.wmem_default = 262144            #默认的发送缓冲区大小
+net.core.wmem_max = 1048576               #发送缓冲区最大值
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.default.rp_filter = 2
+
+# es begin
+vm.max_map_count=655360
+
+#
+# end
+#
+
+
+为使上述配置生效而不重启系统，执行如下命令
+sudo /sbin/sysctl -p
+
+
+为了提高Oracle软件性能，需要为Oracle用户添加以下shell配置：
+Shell Limit					在limits.conf中的项			硬限制
+打开文件描述符的最大数量 	nofile 						65536
+单个用户可用的最大进程数 	nproc 						16384
+进程堆栈段的最大大小 		stack 						10240
+
+
+sudo vi /etc/security/limits.conf
+添加下列数据
+
+# 说明: * 代表针对所有用户
+*   soft noproc   65535
+*   hard noproc   65535
+*   soft nofile   1000000
+*   hard nofile   1000000
+
+# 存在oracle用户时配置,限制oracle用户使用资源的上限
+oracle   soft   stack    10240
+oracle   hard   stack    32768
+oracle   hard   memlock    134217728
+oracle   soft   memlock    134217728
+
+# 文件限制
+sysctl -w fs.file-max =65536
+
+
+
+设置各linux 用户的最大进程数，下面把某linux用户的最大进程数设为10000个：
+sudo vi /etc/profile
+
+# 添加下面这行
+# Modify the maximum number of processes
+ulimit -u 10000  
+
+# 
+
+source /etc/profile	（说明：使修改免重启并生效）
+
+
+创建文件夹
+oracle家目录( echo $ORACLE_HOME )
+sudo mkdir -p /data01/db/products/oracle12c
+解压目录( 安装时,使用的配置文件所在目录 )
+mkdir -p /data01/db/softwares
+sudo chown -R oracle:oinstall /data01/db
+sudo chmod -R 775 /data01/db/
+
+
+使用su - oracle命令切换为oracle用户登录
+sudo su - oracle
+
+
+
+# 添加配置项,
+sudo vi /etc/hosts
+# 本机ip 和 机器名称
+127.0.0.1 gin  
+# 为后续用户变量ORACLE_HOSTNAME属性配置做准备
+
+使用任意文本编辑器打开Shell启动脚本，如：
+cd ~
+ll -a (可以看到使用用户时的默认环境变量配置 隐藏文件.bash_profile)
+sudo vim .bash_profile
+  
+添加如下环境变量：
+
+# for oracle
+
+export TMP=/tmp
+export TMPDIR=$TMP
+
+# 对应/etc/hosts配置,可自定义
+export ORACLE_HOSTNAME=gin
+# 最终cdb1会成为 ip:1521/cdb1 登录路径的后缀,需要注意
+export ORACLE_UNQNAME=cdb1
+export ORACLE_BASE=/data01/db/products
+export ORACLE_HOME=$ORACLE_BASE/oracle12c
+export ORACLE_SID=cdb1
+
+export PATH=/usr/sbin:/data01/db/bin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+#下面三个选项视情况加入
+#export ORACLE_TERM=xterm  #xterm窗口模式安装
+#export LANG=C           #可防止安装过程出现乱码
+#export NLS_LANG=AMERICAN_AMERICA.ZHS16GBK    #设置Oracle客户端字符集，必须与Oracle客户端安装时设置的字符集保持一致。有的是设为AL32UTF8，根据需要自行设定
+
+# end
+
+
+
+使配置立即生效
+source .bash_profile 
+
+输出配置,确认配置生效
+echo $ORACLE_HOME
+会显示
+/data01/db/products/oracle12c
+
+使用unzip命令将其解压(直接解压就行)，解压完成后会生成一个database文件夹
+安装unzip命令
+sudo yum install unzip -y
+解压
+mkdir -p /data01/db/softwares
+unzip linux.x64_12201_database.zip -d /data01/db/softwares
+
+
+终于开始正式安装-_-
+
+# 安装方式一,命令行方式安装(推荐)
+cd /data01/db/softwares/database
+
+方式一直接执行安装命令(已包含各项配置参数):
+
+./runInstaller -ignoreSysPrereqs -ignorePrereq -waitforcompletion \
+-showProgress -silent -responseFile /data01/db/softwares/database/response/db_install.rsp \
+oracle.install.option=INSTALL_DB_SWONLY \
+UNIX_GROUP_NAME=oinstall \
+INVENTORY_LOCATION=/data01/db/oraInventory \
+ORACLE_HOME=/data01/db/products/oracle12c \
+ORACLE_BASE=/data01/db/products \
+oracle.install.db.InstallEdition=EE \
+oracle.install.db.OSDBA_GROUP=dba \
+oracle.install.db.OSBACKUPDBA_GROUP=dba \
+oracle.install.db.OSDGDBA_GROUP=dba \
+oracle.install.db.OSKMDBA_GROUP=dba \
+oracle.install.db.OSRACDBA_GROUP=dba
+
+
+安装方式二,修改db_install.rsp文件(较为繁琐)
+cd /home/oracle/database/response
+vi db_install.rsp
+
+# 需要通过关键字查找到指定位置,再进行配置
+oracle.install.option=INSTALL_DB_SWONLY
+UNIX_GROUP_NAME=oinstall
+INVENTORY_LOCATION=/data01/db/oraInventory
+ORACLE_HOME=/data01/db/products/oracle12c
+ORACLE_BASE=/data01/db/products
+oracle.install.db.InstallEdition=EE
+oracle.install.db.OSDBA_GROUP=dba
+oracle.install.db.OSBACKUPDBA_GROUP=dba
+oracle.install.db.OSDGDBA_GROUP=dba
+oracle.install.db.OSKMDBA_GROUP=dba
+oracle.install.db.OSRACDBA_GROUP=dba
+
+方式二执行下列命令:
+cd ~/database
+./runInstaller -ignoreSysPrereqs -ignorePrereq -waitforcompletion \
+-showProgress -silent -responseFile /home/oracle/database/response/db_install.rsp
+
+
+
+
+
+
+上述两种安装方式二选一,最终显示Successfully Setup Software.安装完成后:
+然后以 root 用户的身份(或oracle用户sudo)执行以下脚本:
+sudo /data01/db/oraInventory/orainstRoot.sh
+sudo /data01/db/products/oracle12c/root.sh
+
+登录:
+sqlplus / as sysdba
+如果能登录则表示安装成功,然后exist 或 quit退出
+
+数据库创建,执行下列命令
+(oracle 用户执行,指定了密码,cdb库和pdb库的sid:cdb1和pdb1,数据库编码AL32UTF8)
+
+dbca -silent -createDatabase \
+ -templateName /data01/db/products/oracle12c/assistants/dbca/templates/General_Purpose.dbc \
+ -gdbname cdb1 -sid cdb1 -responseFile /data01/db/softwares/database/response/dbca.rsp \
+ -characterSet AL32UTF8 \
+ -sysPassword WHX920631zx \
+ -systemPassword WHX920631zx \
+ -createAsContainerDatabase true \
+ -numberOfPDBs 1 \
+ -pdbName pdb1 \
+ -pdbAdminPassword WHX920631zx \
+ -automaticMemoryManagement false \
+ -ignorePreReqs
+
+注意: sysPassword 这类密码 需要至少一个大型字符,1个小写,一个数字,至少8位; 例:WHX920631zx 
+数据文件目录datafileDestination默认安装在$ORACLE_BASE/oradata下
+后续数据库信息会显示在 /data01/db/products/cfgtoollogs/dbca/cdb1/cdb1.log 文件中
+
+再登录至数据库
+sqlplus / as sysdba
+执行命令
+select status from v$instance;
+看到
+STATUS
+------------
+OPEN
+则表示实例已经启动了,然后exist 或 quit退出
+-- (如果未启动,那么需要 startup; (启动) shutdown immediate;(关闭))
+-- 一般服务器宕机,或者重启后出来实例要启动,还要将pdb库启动
+-- ALTER PLUGGABLE DATABASE ALL OPEN;
+-- 关闭所有pdb库
+-- ALTER PLUGGABLE DATABASE ALL CLOSE IMMEDIATE;
+
+
+未配置监听前执行lsnrctl status
+lsnrctl status
+看到错误信息
+
+然后配置监听
+使用默认的netca.rsp文件 
+查看默认配置(有特殊需求可以 vim 修改)
+less /data01/db/softwares/database/response/netca.rsp
+​执行命令
+netca -silent -responseFile /data01/db/softwares/database/response/netca.rsp
+可以看到配置文件的路径和日志记录路径
+Listener Parameter File   /data01/db/products/oracle12c/network/admin/listener.ora
+Listener Log File         /data01/db/products/diag/tnslsnr/custmer-development-d-017184/listener/alert/log.xml
+
+查看监听状态
+lsnrctl status
+查看是否为 PORT=1521, EXTPROC1521
+顺便ping一下 HOST 看是否能通
+
+启动,关闭和查看监听
+lsnrctl start
+lsnrctl stop
+lsnrctl status
+
+
+数据库开机启动
+
+按大多数做法, 实际上是centos6之前使用service命令时的旧方法
+此方法服务是由systemctl enable rc-local.service提供,
+所以如果你采用这种方式需要确认好rc-local服务是否正常
+
+启用rc-local服务
+sudo systemctl enable rc-local.service
+
+然后直接修改(这个文件实际上是为了兼容旧系统。)
+sudo vi /etc/rc.d/rc.local
+
+# 加入下列命令
+$ORACLE_HOME/bin/dbstart $ORACLE_HOME 2>&1 
+
+
+
+
+登录方式:
+
+系统用户
+sys
+WHX920631zx
+10.57.17.184:1521/cdb1
+SYSDBA用户
+
+创建pdb用户:
+
+-- 登录
+sqlplus / as sysdba
+
+-- 查看当前容器(一般是 CDB$ROOT ,需要切换到pdb容器,cdb用户创建用户名需要含c##,jdbc连接不合适)
+show con_name
+
+-- 找到有读写权限的pdb库,安装时初始化指定的pdb容器名(sid)是pdb1
+-- show pdbs;
+select name,open_mode from v$pdbs;
+
+显示为:
+PDB$SEED
+READ ONLY
+
+PDB1
+READ WRITE
+
+-- 切换容器(切换回CDB容器: alter session set container=CDB$ROOT; )
+-- 转换到PDB容器( container=创建的pdb库的sid名 )
+alter session set container=PDB1;  
+
+-- 如果PDB库为关闭状态,那么需要打开
+-- alter pluggable database PDB1 open;
+
+-- 查出当前数据库临时表空间，主要是使用里面的存放路径:
+-- (或通过shell命令找: sudo find / -type f -name '*.dbf' )
+
+select name from v$tempfile;
+
+-- 找到pdb所在的目录,以便存放数据
+-- /data01/db/products/oradata/cdb1/pdb1/
+
+-- 创建临时表空间:(使用上面查找到的目录,创建了一个名为 atreus_temp 的临时表空间)
+create temporary tablespace atreus_temp tempfile '/data01/db/products/oradata/cdb1/pdb1/atreus_temp.dbf' size 200m reuse autoextend on next 100m maxsize unlimited;
+
+-- 创建表空间
+-- 查询出当前数据库表空间,可以使用里面的路径或新建
+select name from v$datafile;
+
+-- /data01/db/products/oradata/cdb1/pdb1/
+
+-- 新建表空间:(这里创建了一个名为 atreus_data 的表空间)
+create tablespace atreus_data datafile '/data01/db/products/oradata/cdb1/pdb1/atreus_data.dbf' size 200M reuse autoextend on next 100M maxsize unlimited default storage(initial 128k next 128k minextents 2 maxextents unlimited);
+
+-- 创建用户,并指定表空间及临时表空间
+-- ( 针对CDB用户: alter user c##atreus quota unlimited on atreus_data container=current; 注意CDB用户也会默认找PDB的库,如果想用CDB表空间,就要 container=current 指定当前空间)
+create user atreus identified by 123456 default tablespace atreus_data temporary tablespace atreus_temp;
+
+-- 给用户授权
+grant create user,drop user,alter user,create any view,connect,resource,dba,create session,create any sequence to atreus;
+
+-- 登录(注意sid不是cdb1了,需要改成pdb1)
+atreus
+123456
+10.57.17.184:1521/pdb1
+normal用户
+
+
+
+错误查看(shell命令: oerr 查看oracle数据库错误)
+oerr ora 28040
+
+
+
+jdbc连接失败,则需要放开版本权限(没有则直接创建)
+vim /data01/db/products/oracle12c/network/admin/sqlnet.ora
+# test begin
+SQLNET.ALLOWED_LOGON_VERSION=8
+#SQLNET.ALLOWED_LOGON_VERSION_SERVER=8
+#SQLNET.ALLOWED_LOGON_VERSION_CLIENT=8
+# test end
+
+
+
+-- 用户解锁
+-- 需要先切换到用户所在的空间
+alter session set container=PDB1;  
+-- 解锁(建议解锁后修改密码,有些jdbc连接存在问题,需要改变密码)
+ALTER USER atreus ACCOUNT UNLOCK;
+-- 修改用户密码
+alter user atreus identified by 12345678;
+
+
+
+-- shell命令,在安装了oracle的系统中查询需要的jar(jdbc连接用,或直接引入 ojdbc14-10.2.0.1.0.jar )
+-- sudo find / -name ojdbc*.jar
+
+-- 查找用户
+select * from dba_users;
+
+-- 查找工作空间的路径
+select * from dba_data_files; 
+
+-- 删除用户
+drop user 用户名称 cascade;
+-- 例:
+drop user atreus cascade;
+
+-- 删除表空间
+drop tablespace 表空间名称 including contents and datafiles cascade constraint;
+-- 例:
+drop tablespace atreus_data including contents and datafiles cascade constraint;
+
+-- 添加字段
+alter table 表名 add (字段名 number(2) [null/not null]);
+alter table 表名 add (字段名 number(2),字段名 varchar2(16));
+
+-- 删除字段：
+alter table 表名 drop column 字段名；
+
+-- 修改字段名
+alter table "ATREUS"."BIFROST_MENU" rename column "LEVEL" to "LEVEL_TYPE";
+
+-- 修改列类型(可改长度,有些类型不能互转,只能重建表)
+ALTER TABLE "ATREUS"."BIFROST_FUNCTION" MODIFY ("NAME" VARCHAR(64));
+
+
+-- 用delete或truncate删除所有表的内容(执行完的结果复制出来执行一遍即可)
+SELECT 'DELETE FROM '|| table_name || ';' FROM USER_TABLES ORDER BY TABLE_NAME;
+-- 或
+SELECT 'TRUNCATE TABLE '|| table_name || ';' FROM USER_TABLES ORDER BY TABLE_NAME;
+
+
+
+-- 删表前操作
+-- (推荐直接删表空间和用户,下列sql 或 plsql navicat选中表直接删了,容易遗漏sequence constraint index)
+-- 优先取消外键语句
+SELECT 'ALTER TABLE ' || table_name || ' disable CONSTRAINT ' || constraint_name || ';' FROM user_constraints where CONSTRAINT_TYPE = 'R';
+-- 取消无效则选择删除
+select 'alter table ' || table_name || ' drop constraint ' || constraint_name || ';' from user_constraints where constraint_type = 'R';
+
+-- 后续如果需要:把已经禁止的外键打开
+SELECT 'ALTER TABLE ' || table_name || ' enable CONSTRAINT ' || constraint_name || ';' FROM user_constraints where CONSTRAINT_TYPE = 'R';
+
+-- 删除表
+SELECT 'DROP TABLE '||TABLE_NAME||';' FROM USER_TABLES ORDER BY TABLE_NAME;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

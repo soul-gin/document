@@ -1,0 +1,37 @@
+try{   
+	   JavaMailSenderImpl  senderImpl = new JavaMailSenderImpl();  
+  
+	   senderImpl.setHost("smtp.163.com");  
+  
+	   //设置了"mail.smtp.auth" 情况下,才需要设置用户名和密码进行校验
+	   senderImpl.setUsername("zhangfl85");  
+  
+	   senderImpl.setPassword("*****");  
+  
+	   Properties props = new Properties();  
+  
+	   props.put("mail.smtp.auth","true");  
+  
+	   senderImpl.setJavaMailProperties(props);       
+  
+	   MimeMessage mailMessage = senderImpl.createMimeMessage();  
+  
+	   MimeMessageHelper messageHelper = new MimeMessageHelper(mailMessage);      
+  
+	   messageHelper.setTo("zhangfl85@126.com");  
+  
+	   messageHelper.setFrom("zhangfl85@163.com");  
+  
+	   messageHelper.setSubject("HTML邮件发送");  
+  
+	   messageHelper.setText("<html><head><meta http-equiv='Content-Type' content='text/html; charset=gbk'></head><body><h1>这是用实现HTML邮件发送的测试</body></h1></html>",true);        
+  
+	   senderImpl.send(mailMessage);  
+  
+	 }catch(Exception e){  
+  
+		e.printStackTrace();  
+  
+	 }      
+  
+}  

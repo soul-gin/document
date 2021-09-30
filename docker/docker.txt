@@ -1,0 +1,320 @@
+
+1. CentOS 7 下安装Docker
+安装版本:Docker CE
+系统要求:64 bit CentOS 7
+
+2. 安装前准备
+卸载旧版的 docker , 输入下列指令
+
+yum remove docker docker-common docker-selinux docker-engin
+
+未安装:
+已加载插件：fastestmirror, langpacks
+参数 docker 没有匹配
+参数 docker-common 没有匹配
+参数 docker-selinux 没有匹配
+参数 docker-engin 没有匹配
+不删除任何软件包
+
+已安装则会显示卸载信息
+
+
+3. docker安装
+(1)yum 包更新到最新
+yum update 
+
+(2)yum-util 提供yum-config-manager功能，另外两个是 devicemapper驱动依赖的
+yum install -y yum-utils device-mapper-persistent-data lvm2
+
+更新yum包的索引
+yum makecache fast
+
+(3)设置yum源为阿里云(网速考虑)
+sudo yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+
+(4)安装docker 
+sudo yum install docker-ce -y
+
+(5)安装后查看docker版本 
+docker -v
+
+
+
+4. 设置ustc的镜像 (ustc 的docker镜像加速器速度很快,不需要注册 https://lug.ustc.edu.cn/wiki/mirrors/help/docker )
+例:查找mysql版本
+http://mirrors.ustc.edu.cn/mysql-repo/yum/mysql-5.7-community/docker/x86_64/
+( 注意,使用国内镜像地址,新建的daemon.json需要修改为 mv daemon.json daemon.conf )
+编辑(新安装的docker则是新建)该文件：daemon.conf
+vi /etc/docker/daemon.conf
+在该文件中输入如下内容：
+{
+"registry‐mirrors": ["https://docker.mirrors.ustc.edu.cn"] 
+}
+
+新安装的docker则是新建该文件：
+mkdir /etc/docker
+cat > /etc/docker/daemon.conf << 'EOF'
+
+{
+"registry‐mirrors": ["https://docker.mirrors.ustc.edu.cn"] 
+}
+
+EOF
+
+
+5. Docker的启动与停止 
+systemctl命令是系统服务管理器指令 
+启动docker： 
+systemctl start docker 
+停止docker： 
+systemctl stop docker 
+重启docker： 
+systemctl restart docker 
+查看docker状态：(也可以查看启动失败信息, journalctl -xe 也可查看)
+systemctl status docker 
+开机启动： 
+systemctl enable docker 
+查看docker概要信息 
+docker info
+查看docker帮助文档 
+docker --help
+
+
+
+6. Docker镜像常用命令
+查看镜像 
+docker images
+
+REPOSITORY：镜像名称 
+TAG：镜像标签 
+IMAGE ID：镜像ID 
+CREATED：镜像的创建日期（不是获取该镜像的日期） 
+SIZE：镜像大小 
+镜像存储在Docker宿主机的 /var/lib/docker 下面
+
+
+docker search 镜像名称 
+NAME：仓库名称 
+DESCRIPTION：镜像描述 
+STARS：用户评价 
+OFFICIAL：是否官方 
+AUTOMATED：自动构建(表示镜像由Docker Hub自动构建流程创建)
+
+
+从中央仓库拉取镜像
+docker pull 镜像名称(name)[:TAG] (不指定版本则会拉取最新的(latest)版本)
+
+例:
+docker pull centos:7
+docker pull redis:3-alpine
+docker pull mysql:5.7.23
+docker pull tomcat:8.0.53
+
+拉取最新(不指定版本)
+docker pull redis
+docker pull nginx
+docker pull zookeeper
+
+
+
+
+按镜像ID删除镜像 
+docker rmi 镜像ID 
+
+删除所有镜像(将反引号中 docker images -q 命令获取到的ID,交由前面命令执行)
+docker rmi `docker images -q`
+
+
+
+6. Docker容器常用命令
+
+查看容器(查看正在运行的容器)
+docker ps 
+ 
+查看所有容器 
+docker ps -a
+
+查看最后一次运行的容器 
+docker ps –l 
+
+查看停止的容器 
+docker ps ‐f status=exited
+
+
+
+创建容器命令：docker run
+-i：表示运行容器 
+-t：表示容器启动后会进入其命令行。即分配一个伪终端。 
+--name :为创建的容器命名。 
+-v：表示目录映射关系（前者是宿主机目录，后者是映射到宿主机上的目录），可以使用多个-v做多个目录或文件映射。(注意：最好做目录映射，在宿主机上做修改，然后共享到容器上。) 
+-d：在run后面加上-d参数,则会创建一个守护式容器在后台运行（这样创建容器后不会自动登录容器)
+-p：表示端口映射，前者是宿主机端口，后者是容器内的映射端口。可以使用多个-p做 多个端口映射 
+
+（1）交互式方式创建容器：
+docker run ‐it ‐‐name=容器名称  镜像名称:标签  [运行命令(可选)]
+例:
+docker run -it --name=centos71 centos:7 /bin/bash 
+这里的 /bin/bash  是容器启动后,加载了centos的bash命令环境
+退出当前容器 
+exit 
+
+通过命令查看，容器状态为启动状态
+docker ps
+
+（2）守护式方式创建容器： 
+docker run ‐di ‐‐name=容器名称 镜像名称:标签 
+例:
+docker run -di --name=centos72 centos:7
+
+登录守护式容器方式： 
+docker exec ‐it 容器名称(或者容器ID) 运行命令(需填)
+例:
+docker exec -it centos72 /bin/bash
+退出当前容器 
+exit 
+
+
+
+启停容器命令
+停止容器： 
+docker stop 容器名称（或者容器ID）
+例:
+docker stop centos71
+
+启动容器： 
+docker start 容器名称（或者容器ID）
+例:
+docker start centos71
+
+删除指定的容器： 
+docker rm 容器名称（容器ID）
+例:(删除前需要先停止容器)
+docker stop centos71
+docker rm centos71
+
+
+文件拷贝 
+将文件拷贝至容器内
+docker cp 需要拷贝的文件或目录 容器名称:容器目录 
+
+将文件从容器内拷贝出来 
+docker cp 容器名称:容器目录 需要拷贝的文件或目录
+
+
+
+目录挂载 
+创建容器的时候，将宿主机的目录与容器内的目录进行映射，
+这样就可以通过修改宿主机某个目录的文件从而去影响容器。 
+例： 
+docker run -di -v /home/centos73:/home/centos73 --name=centos73 centos:7
+
+
+查看容器信息
+docker inspect 容器名称（或者容器ID）
+
+查看容器inspect 节点信息
+例: ( docker inspect ‐‐format='{{.节点名.子节点名}}' 容器名称（容器ID） )
+
+(提取 NetworkSettings 节点中的 IPAddress 属性)
+docker inspect --format='{{.NetworkSettings.IPAddress}}' centos73
+
+(提取 Config 节点中的 Cmd 属性)
+docker inspect --format='{{.Config.Cmd}}' centos73
+
+
+
+拉取mysql镜像
+docker pull centos/mysql-57-centos7
+取别名镜像(  docker tag 本地镜像名 tag标签名  )
+docker tag mysql:5.7.23 mysql57
+
+创建mysql容器(可以使用 容器名:版本, 也可以可以使用tag命令重新定义的名称)
+例:
+docker run -di -v /home/mysql/:/etc/mysql/mysql.conf.d/ --name=mysql_57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 mysql:5.7.23
+或
+docker run -di --name=mysql_57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 mysql57
+
+-p 代表端口映射，格式为 宿主机映射端口:容器运行端口 
+-e 代表添加环境变量 MYSQL_ROOT_PASSWORD 是root用户的登陆密码
+
+docker exec -it mysql_57 /bin/bash
+
+/etc/mysql/mysql.conf.d/mysqld.cnf
+
+
+
+
+#
+# begin my.cfg
+#
+
+[mysqld]
+basedir = /data01/db/mysql/mysql5.7
+datadir = /data01/db/mysql/mysql5.7/data
+tmpdir=/data01/db/mysql/mysql5.7/log
+port = 3306
+# This value is unique for different machines. It is recommended to increase from 1.
+server_id = 1
+socket = /var/run/mysqld/mysql.sock
+log-error = /var/log/mysql.error
+pid-file = /var/run/mysqld/mysqld.pid
+character_set_server = utf8
+collation-server = utf8_general_ci
+lower_case_table_names = 1
+# 
+max_allowed_packet = 200M
+max_connections = 1000
+sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
+# log-bin主从环境才需要:主从日志master-bin,日志保留天数3天;如果已经存在大量master-bin,设置过期时间为1,重启下mysql即可
+# log-bin=master-bin
+# expire_logs_days=3
+# deal remote connect error
+skip-name-resolve
+
+
+
+[client]
+socket = /var/run/mysqld/mysql.sock
+default-character-set=utf8
+
+
+[mysql]
+default-character-set=utf8
+
+# test begin
+[mysqld_safe]
+log-error = /var/log/error.log
+pid-file = /var/run/mysqld/mysqld.pid
+#
+# include all files from the config directory
+#
+!includedir /etc/my.cnf.d
+# test end
+
+
+#
+# end file
+#
+
+
+
+https://blog.csdn.net/oyongde/article/details/77884178
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,116 @@
+
+基于域名的虚拟主机配置步骤
+需求
+www.nier.com --> 静态文件目录/home/mw/nginx/html/www   浏览器地址栏域名显示 www.nier.com:80
+www.nier.com:8000 --> 静态文件目录/home/mw/nginx/html/8000   浏览器地址栏域名显示 www.nier.com:8000
+
+1.修改nginx.conf配置为
+
+worker_processes  1;
+events {
+    worker_connections  1024;
+}
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+    server {
+        listen       80;
+        server_name  www.nier.com;
+        location / {
+            root   html/www;
+            index  index.html index.htm;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }
+	# new begin
+    server {
+        listen       8000;
+        server_name  www.nier.com;
+        location / {
+            root   html/8000;
+            index  index.html index.htm;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }
+	# new end
+	server {
+        listen       80;
+        server_name  bbs.nier.com;
+        location / {
+            root   html/bbs;
+            index  index.html index.htm;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }
+	
+}
+
+
+2. 准备素材
+	mkdir /home/mw/nginx/html/8000 -p
+	tree /home/mw/nginx/html
+	echo "www.nier.com:80" > /home/mw/nginx/html/www/index.html
+	echo "www.nier.com:8000" > /home/mw/nginx/html/8000/index.html
+	
+	配置linux的hosts来模拟域名解析
+	vim /etc/hosts
+	192.168.25.161 www.nier.com bbs.nier.com
+	将 www.nier.com bbs.nier.com 映射成本机ip
+	
+3.检查配置是否正确后重启(nginx访问量大,配置信息加载在内存中,不可能每次都要去读取磁盘)
+	重启前检查配置是否正确
+	/home/mw/nginx/sbin/nginx -t
+	显示如下表示正常
+nginx: the configuration file /home/mw/nginx-1.15.5/conf/nginx.conf syntax is ok
+nginx: configuration file /home/mw/nginx-1.15.5/conf/nginx.conf test is successful
+
+	重新加载
+	/home/mw/nginx/sbin/nginx -s reload
+	
+	查看nginx是否启动了这些端口(80 和 8000端口)
+	netstat -lntup|grep nginx
+
+4.linux测试
+	curl www.nier.com 
+	会显示:www.nier.com:80 
+	
+	curl bbs.nier.com:8000 
+	会显示:www.nier.com:8000   
+	
+5.windows测试
+	win+r 输入 drivers,打开 etc 文件夹,找到 hosts
+	将 192.168.25.161 www.nier.com bbs.nier.com 复制到hosts中,保存
+	然后在浏览器中输入
+	www.nier.com
+	会显示:www.nier.com:80 
+	
+	bbs.nier.com:8000
+	会显示:www.nier.com:8000 
+	
+	
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+
+

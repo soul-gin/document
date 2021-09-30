@@ -1,0 +1,1759 @@
+
+elasticsearch的基本CRUD
+索引( _index 我们的数据被存储和索引在分片(shards)中,索引只是把一个或者多个分片组合在一起的逻辑空间)
+elasticsearch的索引就类似于 mysql的表(table) MongoDB的集合(collection)
+
+文档
+存储在elasticsearch中的主要实体叫文档(document),类似mysql的行,和MongoDB的document规则类似,都可以有不同数据结构,但是相同字段数据类型需要一致
+
+映射
+所有文档写进索引之前都会先进行分析,如何将输入文本分割为词条,哪些词条又会被过滤,这种行为叫做映射.一般由用户自定义规则.
+
+之前我们创建索引及插入数据,都是由elasticsearch进行自动判断类型,有些时候我们需要进行明确字段类型,
+否则,自动判断的类型可能和我们实际需求是不相符的.
+
+JSON type							Field type
+Boolean: true or false				"boolean"
+Whole number: 123					"long"(可自定义 : byte,short,integer,long)
+Floating point: 123.45				"double"(可自定义 : float,double)
+String valid date: "2019-05-19"		"date"
+String: "foo bar"					"string"(可自定义 : string,text,keyword)
+
+
+注意:
+elasticsearch 5.X开始不再支持String,而是由text和keyword类型替代(string在旧版本使用会还是比较多的)
+
+text类型(分词),当一个字段要被全文检索,比如email内容,产品描述,应该使用text类型,设置text类型后,
+字段内容会被分析,在生成倒排索引以前,字符串会被分成一个一个词项,
+text类型的字段不用于排序,很少用于聚合
+
+keyword类型(不分词),适用于索引结构化的字段,比如email地址,主机名,状态码,标签(比较精简,意义完整的文本,类似关系数据库的关键字段)
+keyword类型字段只能通过精确值搜索到(适合过滤,排序,聚合)
+
+
+
+
+
+文档类型(类似于java中的class类属性)
+( _type : 命名规范: 可以用大写或者小写,但是不能使用下划线或者逗号)
+在elasticsearch中,一个索引对象可以存储很多不同用途的对象.例如,一个博客应用可以保存文章和评论.但是如果博客类型为字符串类型,那么所有的博客存储都应该是字符串类型,如果是数字,那么之后存的该文档类型都应该是数字
+
+( _id : id仅仅是一个字符串,它与 _index 和 _type 组合时,就可以在elasticsearch中唯一标识一个文档.创建一个文档可以自定义_id,
+也可以让elasticsearch自动生成(32位长度)
+
+
+1.新建索引
+在lucene中,创建索引是需要定义字段名称以及字段的类型的,在elasticsearch中提供了非结构化索引,就是不需要创建索引结构,
+即可写入数据到索引中,实际上在elasticsearch底层会进行结构化操作,此操作对用户是透明的
+1.1可以使用elasticsearch-view 或者 chrome的elasticsearch head插件来创建
+索引名称:test(自定义即可)
+分片数(默认5):2(单机环境测试选择)
+副本数(默认1):1(单机环境测试选择)
+
+点击ok后弹出{"acknowledged":true,"shards_acknowledged":true}即创建成功
+
+删除索引
+在页面的"概览"处,针对新建索引,选动作,点击删除,并输入"删除"来确认要删除
+
+1.2可以使用postman类似的http rest 模拟请求软件,通过restful风格请求创建索引
+PUT请求方式(端口后面接要创建的索引名称):(raw 的 application/json类型)
+192.168.6.89:9200/test2
+{
+	"settings":{
+		"index":{
+			"number_of_shards":"2",
+			"number_of_replicas":"0"
+		}
+	}
+}
+
+send之后的正常响应为
+{
+    "acknowledged": true,
+    "shards_acknowledged": true
+}
+
+
+DELETE请求方式(端口后面接要删除的索引名称,直接请求即可)
+
+192.168.6.89:9200/test2
+
+send之后的正常响应为
+{
+    "acknowledged": true
+}
+
+
+2.插入数据
+
+2.1指定数据id方式创建
+PUT请求方式(端口后面接索引名称):
+(test 为对应索引名称; user 文档类型; 1001 为索引数据的id)
+192.168.6.89:9200/test/user/1001
+
+{
+	"id": 1,
+	"name":"张三",
+	"age":20,
+	"sex":"男"
+}
+
+send之后的正常响应为
+{
+    "_index": "test",
+    "_type": "user",
+    "_id": "1001",
+    "_version": 1,
+    "result": "created",
+    "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+    },
+    "created": true
+}
+
+_index 为插入数据对应的索引
+_type 为文档类型
+_id 为数据的id(和user数据中的id:1不是一个意思,是elasticsearch对该条数据的一个唯一id)
+_score 为数据的得分
+
+
+
+2.2 不指定数据id的方式创建,elasticsearch会帮我们自动生成一个id
+
+注意: 此时需要修改为POST请求
+(在指定id时认为数据不是全新的,所以可以使用PUT来修改,而没有id被elasticsearch认为是新数据,需要POST来插入才符合RESTful,
+POST插入数据;PUT更新数据; 所以针对该插入场景都使用POST一定是没问题的,POST也能用于更新(对于细分各种method不是很严谨))
+
+POST请求方式(端口后面接索引名称):
+(test 为对应索引名称; user 为对应的文档类型)
+192.168.6.89:9200/test/user
+
+{
+	"id": 2,
+	"name":"张四",
+	"age":20,
+	"sex":"男"
+}
+
+
+send之后的正常响应为
+{
+    "_index": "test",
+    "_type": "user",
+    "_id": "AWrOCEKwQxFxwFku3vxX",
+    "_version": 1,
+    "result": "created",
+    "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+    },
+    "created": true
+}
+
+此时_id为elasticsearch随机生成的AWrOCEKwQxFxwFku3vxX
+
+
+
+3.更新数据
+
+3.1数据的全量覆盖更新操作
+	elasticsearch的操作过程
+	1.从旧文档中检索JSON
+	2.修改它
+	3.删除旧文档
+	4.索引新文档
+
+PUT请求方式(端口后面接索引名称;user 为对应的文档类型; 1001 为索引数据的id):
+192.168.6.89:9200/test/user/1001
+
+{
+	"id": 3,
+	"name":"张五",
+	"age":30,
+	"sex":"妖"
+}
+
+send之后的正常响应为
+{
+    "_index": "test",
+    "_type": "user",
+    "_id": "1001",
+    "_version": 2,
+    "result": "updated",
+    "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+    },
+    "created": false
+}
+此时result为update而不是created了,
+同时,_version会 +1 
+
+
+3.2 局部更新操作
+
+注意:此时需要POST请求发送,并需要在url添加 _update 的uri
+POST请求方式(端口后面接索引名称;user 为对应的索引的类型; 1001 为索引数据的id; _update表示局部更新):
+192.168.6.89:9200/test/user/1001/_update
+
+注意:不能直接填写需要被更新的内容,而是需要告诉elasticsearch我们是要更新文档(document)中,
+id=1001,名为name 和 age的文档内容要被更新
+
+{
+	"doc": {
+		"age":999
+	}
+}
+
+send之后的正常响应为
+{
+    "_index": "test",
+    "_type": "user",
+    "_id": "1001",
+    "_version": 3,
+    "result": "updated",
+    "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+    }
+}
+此时result为update而不是created了,
+同时,_version会 +1 
+
+
+
+4.删除数据
+
+DELETE请求方式(端口后面接索引名称;user 为对应的文档类型; 1001 为索引数据的id):
+192.168.6.89:9200/test/user/1001
+
+send之后的正常响应为
+{
+    "found": true,
+    "_index": "test",
+    "_type": "user",
+    "_id": "1001",
+    "_version": 4,
+    "result": "deleted",
+    "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+    }
+}
+此时result为deleted,(如果不存在会返回404 not found)
+同时,_version会 +1 
+
+删除一个文档也不会立即从磁盘上移除,它只是被标记成已删除.
+elasticsearch将会在你之后添加更多索引的时候才会在后台进行删除内容的清理
+
+
+
+5.搜索数据
+
+5.1 根据elasticsearch的数据ID进行搜索
+
+Get请求方式(端口后面接索引名称;user 为对应的文档类型; 1001 为索引数据的id):
+(pretty 可以美化查询出来的json数据格式)
+192.168.6.89:9200/test/user/1001?pretty
+
+
+{
+    "_index": "test",
+    "_type": "user",
+    "_id": "1001",
+    "_version": 2,
+    "found": true,
+    "_source": {
+        "id": 1,
+        "name": "张三",
+        "age": 999,
+        "sex": "男"
+    }
+}
+
+found : true表示查询到了指定数据
+_source 表示查询到的数据的值
+
+
+5.2 查询所有的数据
+
+制作数据
+POST请求方式自动生成ID
+192.168.6.89:9200/test/user
+
+{
+	"id": 2,
+	"name":"李四",
+	"age":21,
+	"sex":"女"
+}
+
+{
+	"id": 3,
+	"name":"王五",
+	"age":22,
+	"sex":"男"
+}
+
+{
+	"id": 4,
+	"name":"赵六",
+	"age":23,
+	"sex":"女"
+}
+
+{
+	"id": 5,
+	"name":"孙七",
+	"age":24,
+	"sex":"男"
+}
+
+{
+	"id": 6,
+	"name":"张三 李四",
+	"age":999,
+	"sex":"妖",
+	"card":{
+		"cardNumber":"123456"
+	}
+}
+
+
+Get请求方式(端口后面接索引名称;user 为对应的文档类型; _search 为查询方法,后面不接参数时默认查询所有数据):
+192.168.6.89:9200/test/user/_search
+
+
+send之后的正常响应为(_search 默认最多返回10条数据)
+{
+    "took": 18,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 5,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOR7mfQxFxwFku3vxe",
+                "_score": 1,
+                "_source": {
+                    "id": 2,
+                    "name": "李四",
+                    "age": 21,
+                    "sex": "女"
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOSKFjQxFxwFku3vxf",
+                "_score": 1,
+                "_source": {
+                    "id": 3,
+                    "name": "王五",
+                    "age": 22,
+                    "sex": "男"
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOSkQ7QxFxwFku3vxh",
+                "_score": 1,
+                "_source": {
+                    "id": 5,
+                    "name": "孙七",
+                    "age": 24,
+                    "sex": "男"
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "1001",
+                "_score": 1,
+                "_source": {
+                    "id": 1,
+                    "name": "张三",
+                    "age": 20,
+                    "sex": "男"
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOSe1BQxFxwFku3vxg",
+                "_score": 1,
+                "_source": {
+                    "id": 4,
+                    "name": "赵六",
+                    "age": 23,
+                    "sex": "女"
+                }
+            }
+        ]
+    }
+}
+
+
+
+5.3 根据条件查询
+
+5.3.1 条件查询
+Get请求方式(端口后面接索引名称;user 为对应的文档类型; _search 为查询方法,?接查询条件):
+192.168.6.89:9200/test/user/_search?q=age:21
+(q代表query; age代表文档内容名称; 21代表内容名称的值)
+
+
+send之后的正常响应为
+
+{
+    "took": 12,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 1,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOR7mfQxFxwFku3vxe",
+                "_score": 1,
+                "_source": {
+                    "id": 2,
+                    "name": "李四",
+                    "age": 21,
+                    "sex": "女"
+                }
+            }
+        ]
+    }
+}
+
+
+5.3.2 条件查询,美化,查询所需字段
+Get请求方式
+http://192.168.6.89:9200/test/user/_search?q=age:21&pretty&_source=id,name
+
+pretty  将原先的一行数据美化成json格式的多行数据
+_source=id,name   筛选出user文档类型中的id和name字段(field)展示出来,其他field不展示
+
+
+
+send之后的正常响应为
+{
+  "took" : 3,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : 1,
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "test",
+        "_type" : "user",
+        "_id" : "AWrOgUysQxFxwFku3vxm",
+        "_score" : 1.0,
+        "_source" : {
+          "name" : "李四",
+          "id" : 2
+        }
+      }
+    ]
+  }
+}
+
+可以看出只有 name 和 id 字段
+
+
+5.3.3 条件查询,仅查询 _source
+Get请求方式
+http://192.168.6.89:9200/test/user/1001/_source
+
+
+send之后的正常响应为(test索引下,user文档类型,id=1001的 _source 内容)
+{
+    "id": 1,
+    "name": "张三",
+    "age": 999,
+    "sex": "男"
+}
+
+
+5.3.4 判断文档是否存在,不能反回数据
+注意: 需要使用HEAD请求(elasticsearch 支持HEAD请求检查)
+
+HEAD请求方式
+http://192.168.6.89:9200/test/user/1001
+
+只会返回 200 或者 404
+
+
+
+5.4 DSL查询(可以满足复杂的查询方式)
+elasticsearch提供丰富且灵活的查询语言DSL查询(query DSL : Domain Specific Language特定领域语言)以JSON请求体的形式出现
+domain 领域		Specific 特定的
+
+注意: POST(需要添加请求体,来携带复杂的参数格式)
+POST请求方式(端口后面接索引名称;user 为对应的文档类型; _search 为查询方法):
+
+5.4.1 查询匹配结果
+match只是查询方法的一种,表示匹配
+
+192.168.6.89:9200/test/user/_search
+
+{
+	"query" : {
+		"match" : {
+			"age" : 20
+		}
+	}
+
+}
+
+
+
+send之后的正常响应为
+{
+    "took": 13,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 1,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "1001",
+                "_score": 1,
+                "_source": {
+                    "id": 1,
+                    "name": "张三",
+                    "age": 20,
+                    "sex": "男"
+                }
+            }
+        ]
+    }
+}
+
+
+
+
+5.4.2 查询张三 和 李四,高亮显示名字
+
+highlight		表示高亮显示
+fields			表示字段
+
+192.168.6.89:9200/test/user/_search
+
+{
+	"query" : {
+		"match" : {
+			"name" : "张三 李四"
+		}
+	},
+	"highlight":{
+		"fields":{
+			"name":{}
+		}
+	}
+
+}
+
+
+因为分词器的存在,查询到的并不仅仅是名为"张三 李四"的人,而elasticsearch同时会把"张三 李四"根据分词器规则进行分解,
+目前的分词器将"张三 李四"分解成了"张三" 和 "李四",所以会将"张三 李四"这条数据连带着"张三" 和 "李四"这两个数据一起查询出来
+所以一共会有三条数据
+
+
+send之后的正常响应为("<em>张</em><em>三</em>"  em标签会在html页面显示为高亮,从标签分割能看出"张三"也被分成了"张" 和 "三")
+{
+    "took": 130,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 3,
+        "max_score": 2.40893,
+        "hits": [
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "1001",
+                "_score": 2.40893,
+                "_source": {
+                    "id": 6,
+                    "name": "张三 李四",
+                    "age": 999,
+                    "sex": "男"
+                },
+                "highlight": {
+                    "name": [
+                        "<em>张</em><em>三</em> <em>李</em><em>四</em>"
+                    ]
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOR7mfQxFxwFku3vxe",
+                "_score": 1.7600523,
+                "_source": {
+                    "id": 2,
+                    "name": "李四",
+                    "age": 21,
+                    "sex": "女"
+                },
+                "highlight": {
+                    "name": [
+                        "<em>李</em><em>四</em>"
+                    ]
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "1002",
+                "_score": 0.9556451,
+                "_source": {
+                    "id": 1,
+                    "name": "张三",
+                    "age": 999,
+                    "sex": "男"
+                },
+                "highlight": {
+                    "name": [
+                        "<em>张</em><em>三</em>"
+                    ]
+                }
+            }
+        ]
+    }
+}
+
+
+
+5.4.3 查询年龄大于22岁的男性
+
+bool 	代表是一个 布尔(Boolean)操作
+must 	表示必须
+filter 	表示添加一个过滤条件
+range	表示filter的条件是范围过滤
+gt		表示range的范围过滤是大于
+
+
+192.168.6.89:9200/test/user/_search
+
+{
+	"query" : {
+		"bool" : {
+			"must" : {
+				"match" : {
+					"sex" : "男"
+				}
+			},
+			"filter" : {
+				"range":{
+					"age":{
+						"gt":22
+					}
+				}
+			}
+		}
+		
+		
+	}
+
+}
+
+
+monitoring
+
+
+
+send之后的正常响应为
+{
+    "took": 41,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 1,
+        "max_score": 0.47000363,
+        "hits": [
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOSkQ7QxFxwFku3vxh",
+                "_score": 0.47000363,
+                "_source": {
+                    "id": 5,
+                    "name": "孙七",
+                    "age": 24,
+                    "sex": "男"
+                }
+            }
+        ]
+    }
+}
+
+
+
+5.4.4 查询年龄大于23岁,并对年龄聚合分组
+query		代表查询
+	bool 		代表是一个 布尔(Boolean)操作
+	must 		表示必须
+	filter 		表示添加一个过滤条件
+	range		表示filter的条件是范围过滤
+	gt			表示range的范围过滤是大于
+aggs		代表聚合(aggregations  聚集;聚合)
+	all_interests	
+	terms		
+	field
+
+192.168.6.89:9200/test/user/_search
+
+{
+	"query" : {
+		"bool" : {
+			"filter" : {
+				"range":{
+					"age":{
+						"gt":23
+					}
+				}
+			}
+		}	
+	},
+	"aggs":{
+		"all_interests":{
+			"terms":{
+				"field":"age"
+			}
+		}
+	}
+}
+
+
+
+send之后的正常响应为(aggregations为分组信息)
+{
+    "took": 62,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 3,
+        "max_score": 0,
+        "hits": [
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOgYtsQxFxwFku3vxo",
+                "_score": 0,
+                "_source": {
+                    "id": 5,
+                    "name": "孙七",
+                    "age": 24,
+                    "sex": "男"
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "AWrOgacoQxFxwFku3vxp",
+                "_score": 0,
+                "_source": {
+                    "id": 6,
+                    "name": "张三 李四",
+                    "age": 999,
+                    "sex": "妖"
+                }
+            },
+            {
+                "_index": "test",
+                "_type": "user",
+                "_id": "1001",
+                "_score": 0,
+                "_source": {
+                    "id": 1,
+                    "name": "张三",
+                    "age": 999,
+                    "sex": "男"
+                }
+            }
+        ]
+    },
+    "aggregations": {
+        "all_interests": {
+            "doc_count_error_upper_bound": 0,
+            "sum_other_doc_count": 0,
+            "buckets": [
+                {
+                    "key": 999,
+                    "doc_count": 2
+                },
+                {
+                    "key": 24,
+                    "doc_count": 1
+                }
+            ]
+        }
+    }
+}
+
+可以看到"key": 999, "doc_count": 2 说明999岁的有两个人
+
+
+
+5.5 批量操作
+
+5.5.1 批量查询
+
+POST请求
+192.168.6.89:9200/test/user/_mget
+
+{
+	"ids":["1001", "AWrOgUysQxFxwFku3vxm"]
+}
+
+
+send之后的正常响应为(一次请求,查询了两条数据)
+
+{
+    "docs": [
+        {
+            "_index": "test",
+            "_type": "user",
+            "_id": "1001",
+            "_version": 6,
+            "found": true,
+            "_source": {
+                "id": 1,
+                "name": "张三",
+                "age": 999,
+                "sex": "男",
+                "card": {
+                    "cardNumber": "123456"
+                }
+            }
+        },
+        {
+            "_index": "test",
+            "_type": "user",
+            "_id": "AWrOgUysQxFxwFku3vxm",
+            "_version": 1,
+            "found": true,
+            "_source": {
+                "id": 2,
+                "name": "李四",
+                "age": 21,
+                "sex": "女"
+            }
+        }
+    ]
+}
+
+
+
+5.5.2 批量插入,修改,删除操作 _bulk
+
+5.5.2.1 批量插入:
+
+POST请求
+192.168.6.89:9200/test/user/_bulk
+
+create表示插入命令,_index表示被插入的索引,_type是表示数据类型,_id表示数据ID;然后需要回车(\n)再输入执行命令需要携带的数据
+
+{"create":{"_index":"test","_type":"user","_id":2001}}
+{"id": 11,"name":"张三","age":20,"sex":"男"}
+{"create":{"_index":"test","_type":"user","_id":2002}}
+{"id": 11,"name":"李四","age":21,"sex":"女"}
+{"create":{"_index":"test","_type":"user","_id":2003}}
+{"id": 3,"name":"王五","age":22,"sex":"男"}
+{"create":{"_index":"test","_type":"user","_id":2004}}
+{"id": 4,"name":"赵六","age":23,"sex":"女"}
+{"create":{"_index":"test","_type":"user","_id":2005}}
+{"id": 5,"name":"孙七","age":24,"sex":"男"}
+{"create":{"_index":"test","_type":"user","_id":2006}}
+{"id": 6,"name":"张三 李四","age":20,"sex":"妖"}
+
+
+注意: 最后一行也需要按回车(不是严格JSON格式,不能格式化,必须要保证命令,数据都为单独的一行)
+
+
+
+5.5.2.2 批量更新:
+
+{"update":{"_index":"test","_type":"user","_id":2004}}
+{"doc":{"id": 2004,"name":"赵六","age":23,"sex":"女"}}
+{"update":{"_index":"test","_type":"user","_id":2005}}
+{"doc":{"id": 2005,"name":"孙七","age":24,"sex":"男"}}
+{"update":{"_index":"test","_type":"user","_id":2006}}
+{"doc":{"id": 2006,"name":"张三 李四","age":20,"sex":"妖"}}
+
+
+
+注意: 最后一行也需要按回车(不是严格JSON格式,不能格式化,必须要保证命令,数据都为单独的一行)
+
+
+
+5.5.2.3 批量删除:
+
+{"delete":{"_index":"test","_type":"user","_id":2001}}
+{"delete":{"_index":"test","_type":"user","_id":2002}}
+{"delete":{"_index":"test","_type":"user","_id":2003}}
+{"delete":{"_index":"test","_type":"user","_id":2004}}
+{"delete":{"_index":"test","_type":"user","_id":2005}}
+{"delete":{"_index":"test","_type":"user","_id":2006}}
+
+
+
+注意: 最后一行也需要按回车(不是严格JSON格式,不能格式化,必须要保证命令为单独的一行,delete没有请求体,不需要数据行)
+
+
+
+
+_bulk
+批量操作性能问题
+整个批量请求需要被加载到接受我们请求节点的内存里,所以请求越大,给其他请求可用的内存就越小.
+最佳大小取决于硬件,文档大小和复杂度以及索引和索引的负载,可以通过试着从1000-5000个文档开始压测性能,
+找到性能降低的临界点即可(性能不再提升,开始下降的点),
+(不同文档大小也不同,1000个1KB的可以从1000开始,1MB的就不能从1000开始了)一个好的批次最好保持在5-15MB大小间.
+
+
+
+
+5.6 分页
+
+size: 结果数,默认是10
+from: 跳过开始的结果数,默认0
+
+5.6.1 获取前两条(0-2)
+
+GET请求
+192.168.6.89:9200/test/user/_search?size=2
+
+
+
+5.6.2 获取第三条至第四条(2-4)
+
+GET请求
+192.168.6.89:9200/test/user/_search?size=2&from=2
+
+
+
+注意: 应该担心分页太深或者一次请求数据太多的结果,结果在返回前会被排序.
+但是记住一个搜索请求常常涉及多个分片,每个分片生成自己排好序的结果,它们接着需要集中起来排序以确保整体排序正确
+
+在集群系统中深度分页
+假设一个索引有5个主分片(shards),当我们请求结果是第一页(0-9条数据)时,每个分片都会将自己顶端的10条数据返回给请求节点,
+然后请求节点对这50条数据进行排序选出10条顶端结果,舍弃后面的40条
+那么,如果请求到1000页的深度(10001条-10010条数据),那么就会查询到50050条数据,只获取10条,舍弃50040条数据,
+这也就是为什么网络搜索引擎任何语句不能反回多于1000个结果的原因
+
+
+
+
+5.7 自定义文档字段类型(创建索引同时指定文档字段类型,相当于mysql建表,并指定各列的字段类型)
+
+PUT请求方式
+192.168.6.89:9200/test3
+
+在test3索引下面,根据自定义mapping规则创建文档类型person(自定义各field的类型)
+
+{
+	"settings":{
+		"index":{
+			"number_of_shards":"2",
+			"number_of_replicas":"0"
+		}
+	},
+	"mappings":{
+		"person":{
+			"properties":{
+				"name":{
+					"type":"text"
+				},
+				"age":{
+					"type":"integer"
+				},
+				"email":{
+					"type":"keyword"
+				},
+				"hobby":{
+					"type":"text"
+				}
+			}
+		}
+	}
+}
+
+
+查询自定义文档字段类型
+
+GET请求方式
+192.168.6.89:9200/test3/_mapping
+
+
+
+批量插入
+
+POST请求
+192.168.6.89:9200/test3/person/_bulk
+
+{"create":{"_index":"test3","_type":"person","_id":2001}}
+{"name":"张三","age":20,"email":"111@nier.com","hobby":"羽毛球 乒乓球 足球"}
+{"create":{"_index":"test3","_type":"person","_id":2002}}
+{"name":"李四","age":21,"email":"222@nier.com","hobby":"羽毛球 乒乓球 足球 篮球"}
+{"create":{"_index":"test3","_type":"person","_id":2003}}
+{"name":"王五","age":22,"email":"333@nier.com","hobby":"羽毛球 篮球 游泳 听音乐"}
+{"create":{"_index":"test3","_type":"person","_id":2004}}
+{"name":"赵六","age":23,"email":"444@nier.com","hobby":"跑步 游泳"}
+{"create":{"_index":"test3","_type":"person","_id":2005}}
+{"name":"孙七","age":24,"email":"555@nier.com","hobby":"听音乐 看电影"}
+
+
+
+
+
+注意: 最后一行也需要按回车(不是严格JSON格式,不能格式化,必须要保证命令,数据都为单独的一行)
+
+
+
+
+5.8 结构化查询
+
+5.8.1 term(学术,学期)精确查找某个词
+
+POST请求
+192.168.6.89:9200/test3/person/_search
+
+{
+	"query":{
+		"term":{
+			"age":20
+		}
+	}
+}
+
+
+
+查询结果:
+
+{
+    "took": 8,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 1,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2001",
+                "_score": 1,
+                "_source": {
+                    "name": "张三",
+                    "age": 20,
+                    "email": "111@nier.com",
+                    "hobby": "羽毛球 乒乓球 足球"
+                }
+            }
+        ]
+    }
+}
+
+
+
+5.8.2 terms查询
+terms查询和term有点类似,但是 terms 允许指定多个匹配条件
+如果某个字段指定了多个值,那么文档要一起去做匹配
+
+
+POST请求
+192.168.6.89:9200/test3/person/_search
+
+{
+	"query":{
+		"terms":{
+			"age":[20, 21]
+		}	
+	}
+}
+
+
+
+查询结果:
+
+{
+    "took": 21,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 2,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2002",
+                "_score": 1,
+                "_source": {
+                    "name": "李四",
+                    "age": 21,
+                    "email": "222@nier.com",
+                    "hobby": "羽毛球 乒乓球 足球 篮球"
+                }
+            },
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2001",
+                "_score": 1,
+                "_source": {
+                    "name": "张三",
+                    "age": 20,
+                    "email": "111@nier.com",
+                    "hobby": "羽毛球 乒乓球 足球"
+                }
+            }
+        ]
+    }
+}
+
+
+
+
+
+5.8.3 range查询
+
+range过滤允许我们按照指定范围查找一批数据:
+范围操作符包含:
+gt		大于
+gte		大于等于
+lt		小于
+lte		小于等于
+
+
+
+POST请求
+192.168.6.89:9200/test3/person/_search
+
+{
+	"query":{
+		"range":{
+			"age":{
+				"gte" : 22,
+				"lt" : 24
+			}
+		}	
+	}
+}
+
+
+
+查询结果:
+
+{
+    "took": 7,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 2,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2003",
+                "_score": 1,
+                "_source": {
+                    "name": "王五",
+                    "age": 22,
+                    "email": "333@nier.com",
+                    "hobby": "羽毛球 篮球 游泳 听音乐"
+                }
+            },
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2004",
+                "_score": 1,
+                "_source": {
+                    "name": "赵六",
+                    "age": 23,
+                    "email": "444@nier.com",
+                    "hobby": "跑步 游泳"
+                }
+            }
+        ]
+    }
+}
+
+
+
+
+5.8.4 exists查询
+
+POST请求
+192.168.6.89:9200/test3/person/_search
+
+
+{
+	"query":{
+		"exists" : {
+			"field" : "hobby"
+		}
+	}
+}
+
+
+查询结果:(会查询出含有该field的所有数据)
+
+
+{
+    "took": 13,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 5,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2002",
+                "_score": 1,
+                "_source": {
+                    "name": "李四",
+                    "age": 21,
+                    "email": "222@nier.com",
+                    "hobby": "羽毛球 乒乓球 足球 篮球"
+                }
+            },
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2003",
+                "_score": 1,
+                "_source": {
+                    "name": "王五",
+                    "age": 22,
+                    "email": "333@nier.com",
+                    "hobby": "羽毛球 篮球 游泳 听音乐"
+                }
+            },
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2001",
+                "_score": 1,
+                "_source": {
+                    "name": "张三",
+                    "age": 20,
+                    "email": "111@nier.com",
+                    "hobby": "羽毛球 乒乓球 足球"
+                }
+            },
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2004",
+                "_score": 1,
+                "_source": {
+                    "name": "赵六",
+                    "age": 23,
+                    "email": "444@nier.com",
+                    "hobby": "跑步 游泳"
+                }
+            },
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2005",
+                "_score": 1,
+                "_source": {
+                    "name": "孙七",
+                    "age": 24,
+                    "email": "555@nier.com",
+                    "hobby": "听音乐 看电影"
+                }
+            }
+        ]
+    }
+}
+
+
+
+5.8.5 match查询
+
+match 查询是一个标准查询,不管你需要全文本查询还是精确查询基本上都要使用到它,
+如果用match下指定了一个确切值,在遇到数字,日期,布尔值或者 not_analyzed 的字符串时,它们将为你搜索特定的值
+
+
+POST请求
+192.168.6.89:9200/test3/person/_search
+
+
+{
+	"query":{
+		"match" : {
+			"age" : "20"
+		}
+	}
+}
+
+
+
+
+5.8.6 bool 查询
+
+bool 查询可以用来合并多个条件查询结果的布尔逻辑,它包含以下操作符
+	must		多个查询条件完全匹配,相当于 and
+	must_not	多个查询条件的相反匹配,相当于 not
+	should		至少有一个查询条件匹配,相当于 or
+	
+
+POST请求
+192.168.6.89:9200/test3/person/_search
+
+
+
+{
+	"query":{
+		"bool" : {
+			"must_not" : {
+				"term" : {
+					"hobby" : "球"
+				}
+			}
+		}
+	}
+}
+
+
+查询结果:(因为分词器的存在,会将hobby中能分出"球"的所有数据都匹配上,再被must_not过滤掉)
+
+
+{
+    "took": 2,
+    "timed_out": false,
+    "_shards": {
+        "total": 2,
+        "successful": 2,
+        "failed": 0
+    },
+    "hits": {
+        "total": 2,
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2004",
+                "_score": 1,
+                "_source": {
+                    "name": "赵六",
+                    "age": 23,
+                    "email": "444@nier.com",
+                    "hobby": "跑步 游泳"
+                }
+            },
+            {
+                "_index": "test3",
+                "_type": "person",
+                "_id": "2005",
+                "_score": 1,
+                "_source": {
+                    "name": "孙七",
+                    "age": 24,
+                    "email": "555@nier.com",
+                    "hobby": "听音乐 看电影"
+                }
+            }
+        ]
+    }
+}
+
+
+
+
+
+5.8.6 filter 查询
+
+filter需要被包含在 bool 中,不能单独使用
+
+
+POST请求
+192.168.6.89:9200/test3/person/_search
+
+
+对比下面两个查询,都能实现需求
+
+{
+	"query":{
+		"bool" : {
+			"filter" : {
+				"term" : {
+					"age" : 20
+				}
+			}
+		}
+	}
+}
+
+
+
+{
+	"query":{
+		"term" : {
+			"age" : 20
+		}
+	}
+}
+
+注意:
+
+适合完全匹配:(类似关系型数据库,elasticsearch对这种查询有缓存机制,便于下次查询)
+一条过滤语句询问每个文档的字段是否包含特定值(严格的 等于 ),速度相对更快
+
+适合模糊查找:(相关度评分查询,难以缓存,故elasticsearch也没有缓存)
+普通的查询(term,match),并不是严格的等于匹配,而是会比较一定的相关性,如_score评分是否接近,
+再搜索完全文后,根据每条数据的相关性分数进行排序并列出.所以速度相当更慢
+
+建议:
+如果是精确的匹配搜索,最好使用过滤(filter)语句,快,且可以缓存
+
+
+
+
+
+5.9 分词
+
+分词就是指将一个文本转换成一系列单词的过程,也叫文本分析,在elasticsearch中称之为Analysis
+
+5.9.1 分词api
+
+_analyze		表示分词的方法 uri
+analyzer		选择哪种分词器
+(针对 analyzer :
+standard		按单词切分,并且会转换成小写
+simple			按照飞单词切分,并且做小写处理
+ik_smart	ik_max_word		都是ik分词器,一般使用 ik_max_word	
+
+等等 ...(国外分词器适用于英文,对中文处理起来比较一般,目前一般使用ik分词器处理中文)
+https://github.com/medcl/elasticsearch-analysis-ik 可下载
+需要找到对应elasticsearch版本的 tags 进行下载,避免兼容性问题
+mvn package后,在target/releases/elasticsearch-analysis-ik-{version}.zip 找到打包好的zip
+将打包好的 elasticsearch-analysis-ik-5.0.2.zip 解压到 elasticsearch安装目录下的plugins/ik目录下面即可
+
+如果没有unzip,那么先安装
+yum install unzip -y
+mkdir -p /home/admin/middlewares/elasticsearch-5.0.2/plugins/ik
+将 elasticsearch-analysis-ik-5.0.2.zip 上传到ik目录中
+unzip elasticsearch-analysis-ik-5.0.2.zip
+然后重启elasticsearch
+启动时可以看到loaded plugin [analysis-ik]
+)
+
+
+text			分词的内容
+
+
+POST请求
+192.168.6.89:9200/test3/_analyze
+
+{
+	"analyzer" : "standard",
+	"text" : "hello world"
+}
+
+分词结果:
+
+{
+    "tokens": [
+        {
+            "token": "hello",
+            "start_offset": 0,
+            "end_offset": 5,
+            "type": "<ALPHANUM>",
+            "position": 0
+        },
+        {
+            "token": "world",
+            "start_offset": 6,
+            "end_offset": 11,
+            "type": "<ALPHANUM>",
+            "position": 1
+        }
+    ]
+}
+
+
+
+中文分词:
+
+POST请求
+192.168.6.89:9200/test3/_analyze
+
+{
+	"analyzer" : "ik_max_word",
+	"text" : "我是中国人"
+}
+
+
+分词结果:(就不会像国外分词器,只是一个一个的中文字切割开了)
+
+{
+    "tokens": [
+        {
+            "token": "我",
+            "start_offset": 0,
+            "end_offset": 1,
+            "type": "CN_CHAR",
+            "position": 0
+        },
+        {
+            "token": "中国人",
+            "start_offset": 2,
+            "end_offset": 5,
+            "type": "CN_WORD",
+            "position": 1
+        },
+        {
+            "token": "中国",
+            "start_offset": 2,
+            "end_offset": 4,
+            "type": "CN_WORD",
+            "position": 2
+        },
+        {
+            "token": "国人",
+            "start_offset": 3,
+            "end_offset": 5,
+            "type": "CN_WORD",
+            "position": 3
+        }
+    ]
+}
+
+
+
+5.9.2 自定义分词
+cd /home/admin/middlewares/elasticsearch-5.0.2/plugins/ik/config
+vi my.dic
+然后在 my.dic 中添加词汇 
+王者荣耀 
+抖音
+再修改IKAnalyzer.cfg.xml
+vi IKAnalyzer.cfg.xml
+
+通过添加分号,将自定义词典加入
+ <entry key="ext_dict">custom/mydict.dic;custom/single_word_low_freq.dic;my.dic</entry>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+select * from user where username like "%"'username'"%"
+					CONCAT("%", ${user.username} , "SECOND");	 拼接成"%"username"%"
+					CONCAT("%", #{user.username} , "SECOND");    拼接成"%"'username'"%"
+					
+
+原因:(lucene是一个搜索引擎的工具包,提供大量类库,接口  
+solr就是使用lucene进行封装实现后,可以直接使用的搜索工具)
+					
+	类似这种模糊查询,十分消耗数据库资源(%xxx%会导致索引失效,进行全表扫描==顺序扫描)
+	在数据库数据量大的时候,并发一高,就容易奔溃(宕机)
+	
+	所以使用lucene将常用的模糊查询数据 取出 放在lucene的缓存区域 对需要的业务域都建立索引
+	(例如:倒排索引(数据库索引也用了倒排索引,需要去了解) 各种索引-->对大量数据进行分词分析 建立合理索引 从而快速查找)
+	
+	lucene就相当于 将数据库常使用数据  *使用更好的索引方法*  缓存在自己的缓存区 方便快速查询并分担数据库压力
+	(只有在数据变更时才需要更新lucene 才会导致数据库like查询 否则都是lucene来处理这些并发)
+	
+	
+	
+		索引 == 字典索引
+			(对于 GB 2312收录6763个(汉字字库有91251个) 汉字 偏旁部首 是 一个精简的集合)
+			(对于 词典 汉字 是 一个精简的集合)
+			(对于互联网的海量文件集合  关键词  是  一个精简的集合)
+			
+		这也就是为什么需要使用倒排索引,直接通过海量文件一个个顺序扫描与关键词相关的文件及其耗时!!!
+		所以需要查询的是 关键词 的 精简集合 (查字不会一页页去翻 而是查拼音或部首索引)
+			
+			
+	
+	
+倒排索引:
+	
+	见其名知其意，有倒排索引，对应肯定，有正向索引。
+	正向索引（forward index），反向索引（inverted index）更熟悉的名字是倒排索引。
+	
+	(每个被存储的文件都对应一个文件ID，文件内容被表示为一系列关键词的集合
+	（实际上在搜索引擎索引库中，关键词也已经转换为关键词ID）。
+	
+	
+	forward index : 
+	搜索引擎查询 keyword  一般是通过keyword，从文档1开始去找关键词集合中value 和 keyword 一致的
+	即按顺序 从第一条到最后一条 通过key，去找value
+	
+	
+	inverted index :
+	所以，搜索引擎会将正向索引重新构建为倒排索引，即把文件ID对应到关键词的映射转换为关键词到文件ID的映射，每个关键词都对应着一系列的文件，这些文件中都出现这个关键词。
+	得到倒排索引的结构如下：
+	
+	例如“文档1”经过分词，提取了20个关键词，
+	每个关键词都会记录它在文档中的出现次数和出现位置。)
+	
+	--> 即: 关键词会记录它链接到哪些文档(或网络路径) 并通过网页排序算法（PageRank Algorithm）对链接到的文档,网页进行排序
+	(海量文档在建立索引时 完成分词 关键词记录文档ID集合)
+
+	“关键词1”：“文档1”的ID，“文档2”的ID，…………。( 通过关键词1直接找到 一个文档ID_1集合 )
+	“关键词2”：带有此关键词的文档ID列表。 ( 通过关键词2直接找到 一个文档ID_2集合 )
+	
+	--> 再根据ID_1 ID_2集合,经过相关度排序,通过ID查询缓存中的数据(ID查询要远远快于like模糊查询)
+	
+	
+	从词的关键字，去找文档。
+	
+	
+	倒排索引
+	
+	--> 从数据库获取数据,缓存到lucene的缓存区
+	
+	--> 取出缓存区的数据,建立索引(建立和查询需要使用同一个分词器)
+		--> 对文档进行分析  提取关键字 :  ( 正向提取关键字,但不正向建立索引,不然太庞大)
+			--> Doc1 : key1  key2  key3
+			--> Doc2 : key2  key3
+			--> Doc3 : key1  key3
+			--> Doc4 : key2
+			
+		--> 建立索引库( 去百度一下 什么列适合作为索引列)
+			--> key1 : Doc1 Doc3	(反向建立索引,Doc1 Doc3这时候就成为了ID )
+			--> key2 : Doc1 Doc3 Doc4
+			--> key3 : Doc1 Doc2 Doc3 
+			
+	
+	--> 查询 输入的是 : ***key1***key3***
+		--> 分词器分词(IK分词器)
+			--> ***key1***key3***
+			--> key1 key3
+			
+		--> 先查询索引库
+			--> key1 : Doc1 Doc3
+			--> key3 : Doc1 Doc2 Doc3
+			
+		--> 根据ID集合 查询缓存区
+			--> Doc1 Doc3 --> 查询缓存区
+			--> Doc1 Doc2 Doc3 --> 查询缓存区
+			
+			或
+			--> Doc1 Doc2 Doc3 --> 查询缓存区
+			
+			或...
+			
+			(ID 对应 数据  速度就远远高于 like查询了)
+			
+			具体查询方式,会根据业务需要变化(相关度排序,选最靠前的XXX条记录,查询出来即可)
+		
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+

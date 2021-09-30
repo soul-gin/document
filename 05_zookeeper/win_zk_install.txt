@@ -1,0 +1,32 @@
+
+1.下载 zookeeper-3.4.13.tar.gz
+https://zookeeper.apache.org/releases.html
+
+2.解压,创建文件夹
+例:
+在解压目录D:\java\zookeeper\zookeeper-3.4.13中创建 data文件夹 和 log文件夹
+
+3.配置
+将conf目录下的zoo_sample.cfg文件，复制一份，重命名为zoo.cfg
+
+修改zoo.cfg配置文件
+将dataDir=/tmp/zookeeper修改成zookeeper安装目录所在的data文件夹
+dataDir=D:\java\zookeeper\zookeeper-3.4.13\data
+
+新增日志文件夹(在dataDir下方)
+dataLogDir=D:\java\zookeeper\zookeeper-3.4.13\log
+
+4.启动
+启动bin下面的zkServer.cmd
+
+5.验证启动
+启动bin下面的zkCli.cmd
+显示:
+Connecting to localhost:2181
+Welcome to ZooKeeper!
+
+可使用 ls cd rmr 等命令
+ls /
+cd /
+rmr 或 delete
+rmr /elasticjob-job-lite/

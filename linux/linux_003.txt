@@ -1,0 +1,99 @@
+用户管理
+useradd		增加用户
+userdel		删除用户
+passwd		改密码
+change		管理密码有效期
+id			查看UID,GID
+su			用户角色切换
+sudo		(execute a command as another user)
+visudo		配置sudo权限的编辑命令,会自动检查语法(推荐,虽然可以直接vi /etc/sudoers来修改)
+
+groupadd	增加用户组
+groupdel	删除用户组
+
+
+用于存放新用户的配置文件的目录(或称为新用户的环境变量)
+/etc/skel
+查看内部环境内容
+ll -a /etc/skel
+在我们新建用户时,系统会有一步操作就是
+cp /etc/skel/* /home/对应用户名的目录/
+
+作用:
+1.在 /etc/skel/ 下面创建readme.txt;那么新建的用户目录里就会包含该文件
+2.统一初始化新用户的环境变量
+3.如果出现了-bash-4.1$,说明该用户在home目录中对应用户名目录下的环境变量出问题了
+  解决方式: cp /etc/skel/* /home/对应用户名的目录/
+
+cd /etc/skel
+vi /etc/skel/.bash_profile
+
+文件末尾添加下列信息
+
+#define alias
+
+alias tree='tree --charset ASCII'
+alias egrep='egrep --color=auto'
+alias vi='vim'
+
+可以查看用户密码失效,密码长度
+vi /etc/login.defs
+邮件目录
+MAIL_DIR        /var/spool/mail
+密码有效期
+PASS_MAX_DAYS   99999
+密码最小长度
+PASS_MIN_LEN    5
+是否创建家目录
+CREATE_HOME     yes
+设置家目录权限(实际权限需要用777-UMASK的值=700)
+UMASK           077		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

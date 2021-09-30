@@ -1,0 +1,99 @@
+
+
+dubbo-admin.war
+
+1.为了方便输入网络路径,将jar的版本号剔除了
+	--> 将S:\Software_For_vms\Linux_Tomcat_Webapps 路径 下面的 dubbo.war 上传到soft文件夹中
+	--> 将dubbo.war复制到tomcat的webapps目录下
+		cd /soft
+		cp dubbo.war /usr/local/tomcat/apache-tomcat-7.0.52/webapps/
+	
+	--> 开启zookeeper,以便dubbo访问(或根据第四条,配置远程连接zookeeper)
+		sh /usr/local/zookeeper/zookeeper-3.4.6/bin/zkServer.sh start
+		
+	--> 开启tomcat(开启前  jps  ,已经有Bootstrap进程就不启动了
+		同时 jps  会看到QuorumPeerMain 启动了即:zookeeper启动了)
+		sh /usr/local/tomcat/apache-tomcat-7.0.52/bin/startup.sh
+		
+		sh /usr/local/tomcat/apache-tomcat-7.0.52/bin/shutdown.sh
+		
+	--> 查看是否启动成功(tomcat登陆缓慢,多刷新几次页面的链接)
+		tail -f /usr/local/tomcat/apache-tomcat-7.0.52/logs/catalina.out
+		
+		会看到    信息: Server startup in 13646 ms    说明启动成功
+		
+	--> 将服务停用,删除dubbo.war,以防止下次自动部署覆盖之前的dubbo文件
+		sh /usr/local/tomcat/apache-tomcat-7.0.52/bin/shutdown.sh
+		rm -rf /usr/local/tomcat/apache-tomcat-7.0.52/webapps/dubbo.war
+		
+	--> 在启动tomcat	
+		sh /usr/local/tomcat/apache-tomcat-7.0.52/bin/startup.sh
+		
+		有时候会很慢
+		因为Tocmat的Session ID是通过SHA1算法计算得到的，计算Session ID的时候必须有一个密钥。为了提高安全性Tomcat在启动的时候回通过随机生成一个密钥。
+		正是需要linux提供的随机数来产生密钥,所以linux随机数的熵池会影响启动速度
+		通过cat /proc/sys/kernel/random/entropy_avail我们可以查看现在的熵池大小
+		通过cat /proc/cpuinfo | grep rdrand可以查看自己的CPU是否支持DRNG特性，可以充分利用硬件来提高熵池产生的速度（如果你是虚拟机需要开启额外的参数)
+		yum install rng-tools (  安装rngd服务（熵服务，增大熵池）  )
+		systemctl start rngd  (  启动服务  )
+		
+		
+		尚未验证以下操作是否可行
+		如果你的CPU不支持DRNG特性或者像我一样使用虚拟机，可以使用/dev/unrandom来模拟。
+		cp /usr/lib/systemd/system/rngd.service /etc/systemd/system
+		编辑/etc/systemd/system/rngd.service service小结，ExecStart=/sbin/rngd -f -r /dev/urandom
+		systemctl daemon-reload重新载入服务
+		systemctl restart rngd重启服务
+		经过上面的修改，我们再观察/proc/sys/kernel/random/entropy_avail基本上在3000左右。我们可以测试一下随机数的生成速度
+		watch -n 1 cat /proc/sys/kernel/random/entropy_avail观察这个值
+		新打开一个shell，用dd命令测试随机数。dd if=/dev/random of=random.dat count=40960
+	
+3.登陆指定IP的tomcat,访问dubbo
+		192.168.***.***:8080/dubbo
+		
+		192.168.147.136:8080/dubbo
+	
+	用户名  :  root
+	密码    :  root
+	
+	
+4.如果dubbo发布的服务和ZooKeeper不在同一台服务器上,那么需要修改dubbo服务器的配置文件
+	--> 进入发布dubbo服务器的dubbo服务的配置文件夹下
+		cd /usr/local/tomcat/apache-tomcat-7.0.52/webapps/dubbo/WEB-INF/
+	
+	-->修改 dubbo.properties 文件的dubbo.registry.address=zookeeper://127.0.0.1:2181
+		vi dubbo.properties 
+		并将127.0.0.1改问远程地址
+	
+	--> 修改 /webapps/ROOT/WEB-INF/dubbo.properties
+	zookeeper://10.30.12.2:2181?backup=10.30.12.3:2181,10.30.12.4:2181
+	
+	
+	
+	放行端口(或直接关掉防火墙)
+	--> 修改防火墙的规则
+		cd /etc/sysconfig
+		vi iptables
+		
+		复制(yy , p)	
+   				-A INPUT -m state --state NEW -m tcp -p tcp --dport 22 -j ACCEPT
+   			改成
+   				-A INPUT -m state --state NEW -m tcp -p tcp --dport 20880 -j ACCEPT
+   		重启加载防火墙或者重启防火墙
+   			service iptables reload  
+   			或者
+   			service iptables restart 
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			

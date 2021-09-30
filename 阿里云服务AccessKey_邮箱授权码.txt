@@ -1,0 +1,38 @@
+阿里云服务秘钥(暂时不知道什么地方会用到,但是只有一次保存机会-_-的东西)
+AccessKeyID：
+LTAIKUYi1ZbZ5sxu
+
+AccessKeySecret：
+cDaQkVtMRNWOkJbuwcwR0b8yRBcJcu
+
+
+邮箱STMP
+nuawgtijhttbgafj QQ授权码
+z1992	网易163邮箱授权码
+	
+
+Access Key管理中的秘钥(这个有用,阿里云短信服务秘钥)
+Access Key ID		
+LTAIiqd8mnuSD2KL
+
+
+Access Key Secret	
+Ey8u5MFr7kmxBRyHijVl0wwqxd6WFe
+
+
+百度地图开发者平台
+应用编号	应用名称   访问应用（AK）
+10740335 	nuonuo 	    xGCA0ucoy5lPHcAgH1k47SDrZX3PI26i
+
+
+
+
+
+
+
+
+
+
+
+
+

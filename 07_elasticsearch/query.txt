@@ -1,0 +1,13 @@
+{"query":{"bool":{"filter":[{"bool":{"must":[{"terms":{"eventResult.appName.raw":["PMB","IGC","PNB","WOA","WAT","CNB","GTC","OBK","EPC","ATM","MBT","UPY"]}},{"range":{"activity.S_D_EVENTOCCURTIME":{"gte":1599580800000}}},{"range":{"activity.S_D_EVENTOCCURTIME":{"lte":1607334588301}}}]}}]}},"sort":[{"activity.S_D_EVENTOCCURTIME":{"unmapped_type":"long","order":"desc"}}],"aggs":{"ruleList_count":{"terms":{"field":"eventResult.ruleList.raw","size":20}}}}
+
+
+
+
+http://10.57.17.223:9200
+_search?size=1
+{"query":{"bool":{"filter":[{"bool":{"must":[{"term":{"eventResult.appName.raw":"WOA"}},{"range":{"activity.S_D_EVENTOCCURTIME":{"gte":1607270400000}}},{"range":{"activity.S_D_EVENTOCCURTIME":{"lte":1607343653888}}}]}}]}},"sort":[{"activity.S_D_EVENTOCCURTIME":{"unmapped_type":"long","order":"desc"}}],"aggs":{"ruleList_count":{"terms":{"field":"policy.policySet.hitTestRules.name.raw","size":90}}}}
+
+
+http://10.57.17.223:9200/forseti-202012*/
+_search?size=0
+{"query":{"bool":{"filter":[{"bool":{"must":[{"term":{"eventResult.appName.raw":"WOA"}},{"range":{"activity.S_D_EVENTOCCURTIME":{"gte":1607270400000}}},{"range":{"activity.S_D_EVENTOCCURTIME":{"lte":1607343653888}}}]}}]}},"sort":[{"activity.S_D_EVENTOCCURTIME":{"unmapped_type":"long","order":"desc"}}],"aggs":{"ruleList_count":{"terms":{"field":"policy.policySet.hitTestRules.name.raw","size":90,"shard_size":180}}}}

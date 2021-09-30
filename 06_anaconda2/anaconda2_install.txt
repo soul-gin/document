@@ -1,0 +1,100 @@
+
+
+安装Anaconda2
+
+安装操作
+
+
+准备工作:(如果权限不够,可以尝试 sudo chmod 或 sudo chown来赋权,或者装在其他目录也行)
+cd /usr
+
+创建文件夹(需要在/usr/install,model引入的减少不必要错误)
+mkdir -p /usr/install
+
+开始安装:
+sudo unzip anaconda2.zip -d /usr/install
+sudo unzip /home/admin/softwares/anaconda2.zip -d /usr/install
+
+更新环境变量
+sudo vi /etc/profile
+export PATH=/usr/install/anaconda2/bin:$PATH
+
+环境变量生效
+source /etc/profile
+
+which python
+出现/usr/install/anaconda2/bin/python 表示正确安装
+
+which pip
+出现/usr/install/anaconda2/bin/pip 表示已经正确安装
+
+
+sudo chown admin.admin -R /usr/install/anaconda2
+(注意,python应用如果要连接mysql
+下载:
+还需要对应mysql版本的MySQL-shared-5.6.42-1.el6.x86_64.rpm
+https://downloads.mysql.com/archives/community/
+界面中选 5.6.42(mysql)  RedHat(应用所在系统) (根据需要选对应版本)
+安装:
+rpm -ivh MySQL-shared-5.6.42-1.el6.x86_64.rpm
+)
+
+(oracle需要安装cx_Oracle 和 instantclient-basic-linux.x64-19.3.0.0.0dbru.zip
+
+
+查看指定的安装包信息
+pip show cx_Oracle
+
+卸载cx_Oracle组件
+pip uninstall cx_Oracle
+
+需要在/usr/install/anaconda2/bin/目录下执行
+cd /usr/install/anaconda2/bin/
+sudo ./pip install cx_Oracle
+./pip install apscheduler
+sudo yum install python-simplejson -y
+sudo yum install MySQL-python
+
+
+安装cx_Oracle组件
+linux下执行(后续研究为什么有些linux环境 /etc/profile 即便source了,也还是需要在对应目录下执行)
+(是否是cp 或者 mv时使用了sudo的权限问题)
+pip install cx_Oracle
+pip install cx_Oracle-7.2.3-cp27-cp27m-manylinux1_x86_64.whl
+
+
+国内几个pip源如下：
+https://pypi.tuna.tsinghua.edu.cn/simple/cx-oracle/
+
+阿里云 http://mirrors.aliyun.com/pypi/simple/
+
+中国科技大学 https://pypi.mirrors.ustc.edu.cn/simple/
+
+豆瓣(douban) http://pypi.douban.com/simple/
+
+清华大学 https://pypi.tuna.tsinghua.edu.cn/simple/
+
+中国科学技术大学 http://pypi.mirrors.ustc.edu.cn/simple/
+
+http://mirrors.hz.td/pypi/packages/27/77/05536db9e68c9a38f8706670dcf2195a920b2983cbd93ab778ea93ab264b/cx_Oracle-7.2.3-cp27-cp27mu-manylinux1_x86_64.whl
+
+添加Oracle lib
+解压instantclient-basic-linux.x64-19.3.0.0.0dbru.zip
+unzip instantclient-basic-linux.x64-19.3.0.0.0dbru.zip
+复制instantclient-basic-linux.x64-19.3.0.0.0dbru下的所有文件到/usr/lib
+cp -r instantclient_19_3 /usr/lib
+)
+
+
+
+例: 标准输出1 -> file.out文件( > 两边不要有空格,否则会将 1 认为是文件); 2>&1 错误输出重定向到标准输出中
+ls a.txt b.txt 1>file.out 2>&1
+
+nohup python app.py 9003 1>start.log 2>&1
+
+
+
+sed -i "s#/home/qiye/anaconda3/bin/python#/data01/anaconda3/bin/python#g" ./*
+sed -i "s#/usr/install/anaconda2/bin/python#/data01/anaconda2/bin/python#g" ./*
+
+

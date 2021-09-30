@@ -1,0 +1,519 @@
+1.了解服务器整体信息
+
+# 总核数 = 物理CPU个数 X 每颗物理CPU的核数 
+# 总逻辑CPU数 = 物理CPU个数 X 每颗物理CPU的核数 X 超线程数
+
+# 查看物理CPU个数
+cat /proc/cpuinfo| grep "physical id"| sort| uniq| wc -l
+
+# 查看每个物理CPU中core的个数(即核数)
+cat /proc/cpuinfo| grep "cpu cores"| uniq
+
+# 查看逻辑CPU的个数
+cat /proc/cpuinfo| grep "processor"| wc -l
+
+#查看CPU信息（型号）
+cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c
+
+查看内存信息
+# cat /proc/meminfo
+
+查看硬盘容量使用信息
+df -hl
+
+查看/home的文件硬盘使用情况
+du --max-depth=1 -h /home
+
+
+2.查看服务器正在运行的程序
+例:查看 8282端口 的占用情况
+netstat -anp|grep 8282
+
+查看该 pid=16923 的进程的详细信息
+ps -ef|grep 16923
+
+查看名为 tomcat 的程序的详细信息
+其他(nginx java zookeeper aerospike elastic )
+ps -ef|grep tomcat
+或
+ps aux|grep tomcat
+
+查看 mysql(redis redis-cli redis-server 等等) 是否存在
+whereis mysql
+
+查看eth0的MAC地址
+cat /sys/class/net/eth0/address 
+
+10.0.17.58
+fa:16:3e:6b:ea:3f
+
+或ip addr查看link/ether
+
+jps -lm 用于查看有权访问的hotspot虚拟机的进程
+(jps -mlv|grep api 查看信息中含有"api"字符串的进程)
+QuorumPeerMain    (zookeeper的进程)
+Kafka			  (kafka的进程)
+Bootstrap		  (tomcat进程)
+
+hadoop集群
+NodeManager
+DataNode
+SecondaryNameNode
+NameNode
+ResourceManager
+nimbus  supervisor     (storm 进程) 
+HMaster HRegionServer  (hbase 进程)
+
+干掉对应pid=6794的应用
+kill -9 6794
+
+
+3.
+查看当前操作系统发行版信息
+cat /etc/redhat-release
+查看系统版本
+cat /proc/version
+
+
+4.打包解压
+tar -cvf 打包后的名称.tar 被打包的文件(目录)		仅打包
+tar -zcvf 打包后的名称.tar.gz 被打包的文件(目录)    	打包,并以gzip形式压缩( -z )
+tar -zcvf tomcat_bifrost_9081.tar.gz tomcat_bifrost_9081
+tar -zcvf tomcat_holmes_api_9002.tar.gz tomcat_holmes_api_9002
+
+tar -xvf 要被解压的文件.tar -C 解压到的目录
+tar -zxvf 要被解压的文件.tar.gz -C 解压到的目录
+
+
+解压时不生成解压包名称的一级目录(不显示解压信息, 修改components 后面的数字可减少目录层级)
+tar -xf 要被解压的文件.tar --strip-components 1 -C 解压到的目录
+
+ 
+备份下来，并且保存其权限！(-p 您要保留原本文件的属性时)
+tar -zxvpf /tmp/etc.tar.gz /etc
+
+在 /home 当中，比 2019/06/01 新的文件才备份 
+tar -N "2019/06/01" -zcvf home.tar.gz /home
+ 
+我要备份 /home, /etc ，但不要 /home/softwares 
+tar --exclude /home/softwares -zcvf myfile.tar.gz /home/* /etc
+tar zcvf /opt/oldboy1.tar.gz ./oldboy --exclude=oldboy/access_www_2014-08-01.log
+ 
+将 /etc/ 打包后直接解开在 /tmp 底下，而不产生文件(类似 cp -r /etc /tmp)
+cd /tmp 
+tar -cvf - /etc | tar -xvf -
+注意:输出档变成 - 而输入档也变成 - 
+
+
+mysql数据库备份
+
+mysqldump -u [uname] -p[pass] –databases [dbname][dbname2] > [backupfile.sql]
+
+不备份数据
+mysqldump -u tongdun -p --no-data atreus2.2 > backup0527.sql
+
+备份数据和表
+mysqldump -u tongdun -p atreus > backup0704.sql
+
+
+scp 本地用户名@IP地址:文件名1 远程用户名@IP地址:文件名2
+scp -r /home/tongdun/apps/tomcat_holmes_api_9002 tongdun@10.30.12.1:/home/tongdun/apps
+scp -r /home/admin/apps/bifrost.tar.gz tongdun@10.30.12.1:/home/tongdun/apps
+scp -r atreus.tar.gz tongdun@10.30.12.4:/home/tongdun/apps
+
+删除用户
+userdel -r tongdun
+
+sudo  chown  -R  tongdun  /home/tongdun;sudo  chgrp  -R  tongdun  /home/tongdun;
+sudo  chown  -R  admin  /home/admin;sudo  chgrp  -R  admin  /home/admin;
+sudo  chown  -R  mysql  db_backup;sudo  chgrp  -R  mysql  db_backup;
+
+
+
+
+
+linux修改
+vi /etc/my.cnf
+然后添加(在[mysqld]下面)
+max_allowed_packet=100M
+
+netstat -ln | grep mysql  
+找到对应的mysql.sock文件,并在dump命令中直接指定
+/data01/mysql/mysql5.7/log/mysql.sock
+mysqldump --socket=/data01/mysql/mysql5.7/log/mysql.sock -u tongdun -p atreus >atreus_0627_2.sql
+
+mysqldump -u tongdun -p atreus >atreus_0816.sql
+
+10.30.12.2:2181,10.30.12.3:2181,10.30.12.4:2181
+
+scp -r /home/tongdun/apps/appv2.2/preserver-release-2.2.0_0717.war tongdun@10.30.12.4:/home/tongdun/apps/appv2.2/;
+scp -r /home/tongdun/apps/appv2.2/preserver-release-2.2.0_0717.war tongdun@10.30.12.2:/home/tongdun/apps/appv2.2/;
+scp -r /home/tongdun/apps/appv2.2/preserver-release-2.2.0_0717.war tongdun@10.30.12.3:/home/tongdun/apps/appv2.2/;
+
+scp -r /home/tongdun/apps/tomcat_holmes_web_9001 tongdun@10.30.12.4:/home/tongdun/apps/backup_app;
+scp -r /home/tongdun/apps/appv2.2/holmes-web-release-2.7.3.war tongdun@10.30.12.4:/home/tongdun/apps/appv2.2/;
+scp -r /home/tongdun/apps/appv2.2/holmes-api-2.7.3.war tongdun@10.30.12.3:/home/tongdun/apps/appv2.2/;
+
+
+校验lib下面的jar(在lib目录执行,匹配*.jar)
+for j in *.jar; do echo $j; jar tvf $j > /dev/null ; echo $j done; done
+
+http://10.30.10.1:8088/report/download/101400
+
+# 替换文件中的所有匹配项
+sed -i 's/原字符串/替换字符串/g' filename
+sed -i 's/&nbsp;/ /g' preloanReport.vm
+
+jmap -heap 进程id
+
+
+http://localhost:8080/report/download/101400
+
+
+https://zqhxuyuan.github.io/2015/10/15/Cassandra-Daily/#Cassandra日常运维
+
+
+
+
+
+
+atreus
+123456
+10.57.17.184:1521/pdb1
+角色:
+plsql:normal
+navicat:default
+
+10.57.17.184:2181
+10.57.17.184:3000
+10.57.17.184:9092
+10.57.17.184:9200
+jdbc:oracle:thin:@10.57.17.184:1521/pdb1
+atreus
+123456
+oracle.jdbc.driver.OracleDriver
+sed 's#10.58.10.125#10.57.17.184#g' application.properties
+cd /home/admin/apps/tomcat_bifrost_9081/webapps/ROOT/
+cd /home/admin/apps/tomcat_bifrost_9081/webapps/ROOT/WEB-INF/classes/
+atreusCluster
+
+cp /home/admin/apps/tomcat_bifrost_9081/webapps/ROOT/WEB-INF/lib/ojdbc14-10.2.0.1.0.jar /home/admin/apps/tomcat_freyr_9088/webapps/ROOT/WEB-INF/lib
+cp /home/admin/apps/tomcat_bifrost_9081/webapps/ROOT/WEB-INF/lib/ojdbc14-10.2.0.1.0.jar /home/admin/apps/tomcat_atreus_9090/webapps/ROOT/WEB-INF/lib/
+
+存在问题的:
+api:表不存在
+atreus:可处理,lib中加ojdbc的jar
+freyr:后续补充包,hibernate启动问题
+holmes-web:启动成功后报错,会显示练级一个奇怪的ip
+holmes-api:启动数据库内存泄漏
+cd /data01/preCredit/tomcat_holmes_python_9003
+python app.py 9003 2 & >> ./logs/app.log 
+
+看下anaconda2是不是没安装好
+
+o+w需要去掉,usr下面的lib目录需要全改回root用户
+drwxr-xrwx.  15 root root 4096 Oct 15 21:31 usr
+chmod o-w /usr
+chown root.root /usr/lib -R
+查看单个文件夹目录大小: du -sh 文件或文件夹路径
+
+
+mkdir -p properties/{river,bifrost,atreus,api,preserver,holmes_web,holmes_api,holmes_python,consumer,freyr}
+
+ps -ef|grep tomcat|grep -v atreus3.0|grep -v tl_bank
+
+
+mvn install -Dmaven.test.skip=true -e
+
+find . -type f -size +800M  -print0 | xargs -0 du -h
+
+
+
+
+
+查看文件个数,包括子文件夹
+ls -l 文件夹 |grep "^-"|wc -l
+ls -l ./20200307 |grep "^-"|wc -l
+
+查看某文件夹下文件夹的个数，包括子文件夹里的。
+ls -l 文件夹 |grep "^d"|wc -l
+ls -lR ./20200307 |grep "^d"|wc -l
+
+ls -l
+长列表输出该目录下文件信息(注意这里的文件，不同于一般的文件，可能是目录、链接、设备文件等)
+
+grep "^-"
+这里将长列表输出信息过滤一部分，只保留一般文件，如果只保留目录就是 ^d
+
+wc -l
+统计输出信息的行数，因为已经过滤得只剩一般文件了，所以统计结果就是一般文件信息的行数，
+又由于一行信息对应一个文件，所以也就是文件的个数。
+
+
+这是因为新版的Linux系统加入了 ptrace-scope 机制. 
+这种机制为了防止用户访问当前正在运行的进程的内存和状态, 
+而一些调试软件本身就是利用 ptrace 来进行获取某进程的内存状态的(包括GDB),
+所以在新版本的Linux系统, 默认情况下不允许再访问了. 可以临时开启.
+echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope	
+
+
+永久写到文件来持久化: 添加或修改为以下这一句:(0:允许, 1:不允许)
+echo 0 > /proc/sys/kernel/yama/ptrace_scope
+ 
+
+
+jmap -dump:format=b,file=e.bin 13445
+jstack -l 13445 > preserver_jstack.log dump
+
+命令查看进程中占用资源最大的前20个对象
+jmap -histo 25085 | head -20
+jmap -histo `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` | head -20
+
+触发gc
+jmap -histo:live 25085 | head -20
+jmap -histo:live `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` | head -20
+
+
+[C is a char[]
+[S is a short[]
+[I is a int[]
+[B is a byte[]
+[[I is a int[][]
+
+
+1、获取内存详情：jmap -dump:format=b,file=heap.bin pid
+这种方式可以用 jvisualvm.exe 进行内存分析，或者采用 Eclipse Memory Analysis Tools (MAT)这个工具
+例:
+jmap -dump:format=b,file=preserver.bin `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'`
+jmap -dump:live,format=b,file=preserver_live.bin `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'`
+
+2. 获取内存dump：  jmap -histo:live pid (可以分析大对象)
+这种方式会先出发fullgc，所有如果不希望触发fullgc 可以使用jmap -histo pid
+
+3.第三种方式：jdk启动加参数：
+-XX:+HeapDumpBeforeFullGC 
+-XX:HeapDumpPath=/httx/logs/dump
+这种方式会产生dump日志，再通过jvisualvm.exe 或者Eclipse Memory Analysis Tools 工具进行分析
+
+-XX:MetaspaceSize=512m -XX:MaxMetaspaceSize=512m
+-XX:MetaspaceSize=200m;-XX:MaxMetaspaceSize=256m;
+jstat -gcutil 进程id [多少毫秒打印一次]
+jstat -gc 进程id [多少毫秒打印一次]
+
+jstat -gc `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` 2000
+jstat -gcutil `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` 2000
+
+标志
+
+	
+说明
+S0C 年轻代中第一个survivor区的容量 (字节)
+S0U 年轻代中第一个survivor区目前已使用空间 (字节)
+EC 年轻代中Eden的容量 (字节)
+EU 年轻代中Eden目前已使用空间 (字节)
+OC Old代的容量 (字节)
+OU Old代目前已使用空间 (字节)
+YGC 从应用程序启动到采样时年轻代中gc次数
+YGCT 从应用程序启动到采样时年轻代中gc所用时间(s)
+FGC 从应用程序启动到采样时old代(全gc)gc次数
+FGCT 从应用程序启动到采样时old代(全gc)gc所用时间(s)
+
+
+E 年轻代中Eden已使用的占当前容量百分比
+O old代已使用的占当前容量百分比
+S0CMX 年轻代中第一个survivor区的最大容量 (字节)
+S1CMX 年轻代中第二个survivor区的最大容量 (字节)
+ECMX 年轻代中Eden的最大容量 (字节)
+DSS 当前需要survivor区的容量 (字节)（Eden区已满）
+TT 持有次数限制
+MTT 最大持有次数限制
+
+触发FGC的阈值(如果没有配置-XX:MetaspaceSize，那么触发FGC的阈值是21807104（约20.8m）)
+jinfo -flag MetaspaceSize 进程id
+
+
+看一下 jstack
+
+jstack -m <pid> >jvm_deadlocks.txt   jstack -l <pid> >jvm_listlocks.txt
+
+使用top -H -p <pid>找出某进程中要分析的线程ID
+top -H -p `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'`
+
+首先看一下我自己在项目中使用 jstack如何查询问题：
+可以使用jstat查看 gc情况  jstat -gc  pid  5000 (jstat -gc 进程号  间隔毫秒数)
+jstat -gc `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` 2000
+jstat -gcutil `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` 2000
+
+通过 jstack pid 查看进程/线程情况
+jstack `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'`
+jstack 9347 (这里可以为 top -H -p <pid>查看到的)
+
+然后将线程ID转换为16进制后，再在线程dump文件中搜索相关信息
+ps -ef | grep 'com.sankuai.qcs.regulation.dispatch'
+
+
+
+死锁查询
+打印前后几行
+jstack `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` | grep -C 5 "java.lang.Thread.State: WAITING"
+jstack `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` | grep -C 5 'java.lang.Thread.State:BLOCKED'
+
+打印行号
+jstack `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'` | grep -n 'java.lang.Thread.State:BLOCKED'
+
+定位问题
+
+
+(3)jstack 21980 |grep '线程的16进制的ID'
+
+注意 在第二步查到线程的ID之后，转换成16进制的。放在(3)里面； 
+
+同事查的：
+
+进入系统 使用  jstack.log -A5;
+
+
+任何一个JVM参数的默认值可以通过java -XX:+PrintFlagsFinal -version |grep JVMParamName获取，
+例如：java -XX:+PrintFlagsFinal -version |grep MetaspaceSize
+
+
+CATALINA_OPTS='-Xms512m -Xmx4096m -XX:PermSize=64M -XX:MaxNewSize=128m -XX:MaxPermSize=64m -XX:ParallelGCThreads=8 -XX:+UseConcMarkSweepGC -XX:GCLogFileSize=100M -Xloggc:/var/log/search/tomcat_gc.log'
+
+../logs/tomcat_gc.log
+
+整个堆大小=年轻代大小 + 年老代大小 + 元数据大小(以前为持久代).
+
+mkdir -p /home/tongdun/apps/gc_log
+preserver配置
+vi /home/tongdun/apps/tomcat_preserver_7070/bin/catalina.sh
+JAVA_OPTS='-Xms1024m -Xmx1024m -XX:NewSize=256m -XX:MaxNewSize=256m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:GCLogFileSize=100M -Xloggc:/home/tongdun/apps/gc_log/preserver_gc.log'
+river配置
+vi /home/tongdun/apps/tomcat_river_9080/bin/catalina.sh
+JAVA_OPTS='-Xms1024m -Xmx1024m -XX:NewSize=256m -XX:MaxNewSize=256m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:GCLogFileSize=100M -Xloggc:/home/tongdun/apps/gc_log/river_gc.log'
+holmes_web配置
+vi /home/tongdun/apps/tomcat_holmes_web_9001/bin/catalina.sh
+JAVA_OPTS='-Xms1024m -Xmx1024m -XX:NewSize=256m -XX:MaxNewSize=256m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:GCLogFileSize=100M -Xloggc:/home/tongdun/apps/gc_log/holmes_web_gc.log'
+
+atreus配置
+vi /home/tongdun/apps/tomcat_atreus_9090/bin/catalina.sh
+JAVA_OPTS='-Xms1536m -Xmx1536m -XX:NewSize=384m -XX:MaxNewSize=384m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:GCLogFileSize=100M -Xloggc:/home/tongdun/apps/gc_log/atreus_gc.log'
+kratos_api配置
+vi /home/tongdun/apps/tomcat_api_9004/bin/catalina.sh
+JAVA_OPTS='-Xms1536m -Xmx1536m -XX:NewSize=384m -XX:MaxNewSize=384m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:GCLogFileSize=100M -Xloggc:/home/tongdun/apps/gc_log/kratos_api_gc.log'
+holmes_api配置
+vi /home/tongdun/apps/tomcat_holmes_api_9002/bin/catalina.sh
+JAVA_OPTS='-Xms1536m -Xmx1536m -XX:NewSize=384m -XX:MaxNewSize=384m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:GCLogFileSize=100M -Xloggc:/home/tongdun/apps/gc_log/holmes_api_gc.log'
+
+
+bifrost配置
+mkdir -p /home/tongdun/apps/gc_log
+vi /home/tongdun/apps/tomcat_bifrost_9081/bin/catalina.sh
+JAVA_OPTS='-Xms4096m -Xmx4096m -XX:NewSize=1024m -XX:MaxNewSize=1024m -XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=512m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:GCLogFileSize=100M -Xloggc:/home/tongdun/apps/gc_log/bifrost_gc.log'
+
+
+生产默认配置
+JAVA_OPTS='-server -Xms5120m -Xmx10240m -XX:PermSize=256m -XX:MaxNewSize=256m -XX:MaxPermSize=5120m'
+
+启动后可以 jamp -heap 查看
+例:
+jmap -heap `ps -ef|grep tomcat_preserver|grep -v grep |awk '{print $2}'`
+
+atreus 较为消耗内存
+PS Old Generation
+   capacity = 763363328 (728.0MB)
+   used     = 571555432 (545.0777359008789MB)
+   free     = 191807896 (182.9222640991211MB)
+
+其次是bifrost
+
+再次是 tomcat_api
+PS Old Generation
+   capacity = 330825728 (315.5MB)
+   used     = 252550416 (240.85084533691406MB)
+   free     = 78275312 (74.64915466308594MB)
+   76.33941215116135% used
+
+再次是 holmes_api
+PS Old Generation
+   capacity = 568328192 (542.0MB)
+   used     = 203211632 (193.79771423339844MB)
+   free     = 365116560 (348.20228576660156MB)
+   35.756035836420374% used
+
+
+
+
+
+安装的时候这个路径下没有有java.env文件，需要自己新建一个：
+cd /home/tongdun/mw/zookeeper-3.4.13/conf
+vi java.env  
+java.env文件内容如下：
+注意: 目前发现zookeeper老年代使用率不高,有待后续跟进观察,
+新生代和老年代比例可以高一点,1:2是zookeeper的默认分配(无需按jvm推荐的1:4)
+
+# 
+#!/bin/sh
+#
+
+# export JAVA_HOME=/usr/local/jdk1.8.0_191
+
+# heap size MUST be modified according to cluster environment
+export JVMFLAGS="-Xms1536m -Xmx1536m -XX:NewSize=512m -XX:MaxNewSize=512m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m $JVMFLAGS"
+
+#
+# end
+#
+
+
+$ ./zkServer.sh start  (说明：启动服务)
+$ tail -f -n 500 zookeeper.out	(说明：启动后当前目录就会有zookeeper.out,查看运行情况)
+$ ./zkServer.sh status	（说明：查看谁是leader，其余都是follower，单机时为standalone）
+$ ./zkServer.sh stop   (说明：停止服务)
+
+
+
+校验lib下面的jar(在lib目录执行,匹配*.jar)
+for j in *.jar; do echo $j; jar tvf $j > /dev/null ; echo $j done; done
+
+
+设置堆内存溢出打印
+-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/home/admin/apps/gc_log/
+
+
+-XX:PretenureSizeThreshold=<字节大小>可以设分配到新生代对象的大小限制。
+任何比这个大的对象都不会尝试在新生代分配，将在老年代分配内存。
+PretenureSizeThreshold 默认值是0，意味着任何对象都会现在新生代分配内存。
+
+
+MAT的 component 分析
+cn.tongdun.preserver.*
+java.util.*
+
+idea插件
+JProfiler
+
+200万 cusId
+74000000   70M
+
+300万 cusId
+111000000   105M
+
+200万 cusId age inconme phone
+265811529   253M
+
+
+
+直接存储 大数据带分隔符的数据,剔除字段名( 2亿数据 116 字符 = 24G)
+"{"S_DC_VS_IDNO":"360702199210311611","S_CI_VB_INCOME":"6345407.0","S_CI_VB_UUID":"18179095431","S_CI_VB_AGE":"25"}"
+
+
+
+JAVA_OPTS='-Xms1024m -Xmx1024m -XX:MetaspaceSize=384M -XX:MaxMetaspaceSize=512m'
+
+
+
+
+
+
+
+

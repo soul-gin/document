@@ -1,0 +1,128 @@
+MAVEN安装前准备:
+	安装JDK
+	--> mkdir /tempdata
+	--> 将 jdk8…..gz 上传到 /tempdata 文件夹下
+	--> java -version   (检查系统上是否安装了jdk(若安装了就需要先卸载再使用我们自己的))
+	--> rpm -qa | grep java   查看出安装的java的软件包
+	--> 卸载linux自带的jdk  
+		rpm -e --nodeps java-1.6.0-openjdk-1.6.0.0-1.66.1.13.0.el6.i686
+		rpm -e --nodeps java-1.7.0-openjdk-1.7.0.45-2.4.3.3.el6.i686 tzdata-java-2013g-1.el6.noarch
+		(tzdata-java-2013g-1.el6.noarch 
+			出现这个很不幸,先安装 yum install gcc-c++
+			yum -y remove tzdata-java-2013g-1.el6.noarch
+			yum -y remove 要卸载的文件名
+			一定确保卸干净 rpm -qa | grep java    
+			java -version 如果卸干净,那么SecureCRT显示乱码,虚拟机显示没有java这个command not found
+		)
+	--> 在 /usr/local 新建一个文件夹 java
+		mkdir /usr/local/java
+		
+	-->	移动 jdk…..gz 到 /usr/local/java下
+		cd /tempdata
+		mv jdk-8u181-linux-x64.tar.gz /usr/local/java
+		
+	--> 进入 /usr/local/java 目录,解压jdk
+		cd /usr/local/java 
+		tar -zxvf jdk-8u181-linux-x64.tar.gz
+		
+	--> 配置环境变量
+		vi /etc/profile
+		
+	--> 在文件的最后面添加如下代码(在)
+		export JAVA_HOME=/usr/local/java/jdk1.8.0_181
+		export PATH=$JAVA_HOME/bin:$PATH
+
+    --> 保存退出   :wq
+
+    --> 重新加载配置文件
+
+		source /etc/profile
+
+		
+	--> java -version 查看是否为1.8.0_181
+	
+	--> 输入  jps  看这个命令是否可用
+	
+
+1.安装MAVEN
+	--> 将 maven…..gz 上传到 /tempdata 文件夹下
+
+	--> 在 /usr/local 新建一个文件夹 maven
+		mkdir /usr/local/maven
+		
+	-->	移动 maven…..gz 到 /usr/local/maven下
+		cd /tempdata
+		mv apache-maven-3.3.9-bin.tar.gz /usr/local/maven
+		
+	--> 进入 /usr/local/maven 目录,解压jdk
+		cd /usr/local/maven 
+		tar -zxvf apache-maven-3.3.9-bin.tar.gz
+		
+	--> 配置环境变量
+		vi /etc/profile
+		
+	--> 在文件的最后面添加如下代码(在)
+		export MAVEN_HOME=/usr/local/maven/apache-maven-3.3.9
+		修改PATH,在JAVA_HOME后添加
+		export PATH=$JAVA_HOME/bin:$MAVEN_HOME/bin:$PATH
+
+    --> 保存退出   :wq
+
+    --> 重新加载配置文件
+
+		source /etc/profile
+
+		
+	--> mvn -version 查看是否为Apache Maven 3.3.9 (bb52d8502b132ec0a5a3f4c09453c07478323dc5; 2015-11-11T00:41:47+08:00)
+
+2.修改setting.xml,以便就近下载jar(可以通过notepad++远程连接修改文件)
+	--> vi /usr/local/maven/apache-maven-3.3.9/conf/settings.xml 
+
+	--> mkdir /usr/local/maven/repository  修改仓库地址
+
+	--> 修改localRepository标签
+	<localRepository>/usr/local/maven/repository</localRepository>
+
+	--> 在mirrors标签中新增下列配置
+<mirror>
+	
+	<!-- id : 是用来区别mirror的，所有的mirror不能有相同的id -->
+	<!-- name : 为这个mirror定义一个人类能看懂的名称 -->
+	<!-- url ：表示该镜像的url。当Maven在建立系统的时候就会使用这个url来连接到我们的远程仓库 -->
+	<!-- mirrorOf : 尽量不要使用*,使用全匹配会使得mvn在查找远程repository时使用查到的第一个库,
+		针对多仓库私服,可能获取不到最合适的repository,导致部分jar不能下载 -->
+	
+	<id>nexus-aliyun</id>
+	<name>nexus-aliyun</name>  
+	<url>http://maven.aliyun.com/nexus/content/groups/public</url>
+	<mirrorOf>central</mirrorOf>
+
+</mirror> 
+
+<!-- backup mirror -->
+<mirror>    
+	<id>nexus-oschina</id>    
+	<name>nexus-oschina</name>          
+	<url>http://maven.oschina.net/content/groups/public/</url>    
+	<mirrorOf>central</mirrorOf>    
+</mirror>  
+<mirror>  
+	<id>nexus-mvn-net</id>  
+	<mirrorOf>central</mirrorOf>  
+	<name>Human Readable Name for this Mirror. -_-</name>  
+	<url>http://maven.net.cn/content/groups/public/</url>     
+</mirror> 
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+	

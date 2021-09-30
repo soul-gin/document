@@ -1,0 +1,402 @@
+
+
+卸载 aerospike
+停止服务(如果有启动)
+systemctl stop aerospike
+
+#查看服务名
+rpm -qa |grep -i aerospike
+aerospike-server-community-4.3.1.4-1.el7.x86_64
+#卸载
+yum remove aerospike-server-community-4.3.1.4-1.el7.x86_64
+
+
+创建 admin 用户组
+groupadd admin
+创建使用admin用户组(-g 后面跟对应用户组)的用户 admin(第二个admin代表用户), -m (自动建立用户的登入目录)
+useradd -g admin admin -m
+
+chmod +w /etc/sudoers
+vim /etc/sudoers
+在文件最后添加如下内容：
+# add privilege for admin
+
+admin ALL=(ALL) ALL
+
+# end
+
+
+安装Aerospike
+
+注意：centos6+和centos7+系统的安装包不一样
+aerospike-server-community-4.3.1.4-el7.tgz 适用于centos7
+aerospike-server-community-4.3.1.4-el6.tgz 适用于centos6
+
+安装路径 
+/home/admin/mw/aerospike 
+安装操作
+解压安装包
+cd /home/admin/softwares/
+tar -zxvf /home/admin/softwares/aerospike-server-community-4.3.1.4-el7.tgz -C /home/admin/mw/
+cd /home/admin/mw;mv aerospike-server-community-4.3.1.4-el7 aerospike
+mkdir /home/admin/mw/aerospike/{data,logs} 
+
+执行安装(建议切换到asinstall所在目录执行命令)
+cd /home/admin/mw/aerospike/
+sudo sh asinstall
+或
+sudo /home/admin/mw/aerospike/asinstall
+
+验证安装是否成功
+yum list installed | grep aerospike-tools
+aerospike-tools.x86_64                  3.15.3.18-1.el7                   installed
+
+
+
+修改配置
+
+安装完毕之后存在/etc/aerospike/aerospike.conf文件,
+该文件是Aerospike的配置文件(此处需要根据实际需求配置).
+授权非root用户修改权限
+sudo chmod 777 /etc/aerospike/aerospike.conf
+
+修改配置(使用cat直接覆盖需要注意对应版本,不同版本配置可能不同!!!)
+
+sudo cat > /etc/aerospike/aerospike.conf<<'EOF'
+
+# Aerospike database configuration file for use with systemd.
+service {
+		# 副本计数自动减少到1的节点数量
+		paxos-single-replica-limit 1
+		proto-fd-max 15000
+		
+		# 可选配置 begin
+		# 服务线程
+		#service-threads 32
+		# 事务队列
+		#transaction-queues 32
+		# 事务线程每队列
+		#transaction-threads-per-queue 32
+		# 批处理索引线程
+		#batch-index-threads 32
+		#batch-max-requests 200000
+		# 可选配置 end
+		
+	}
+	logging {
+		# 日志文件路径,必须是绝对路径(目录需要提前创建,替换掉console)
+		file /home/admin/mw/aerospike/logs/aerospike.log {
+		context any info
+	}
+}
+network {
+	service {
+		address any
+		port 3000
+	}
+	heartbeat {
+		mode mesh
+		# 本机IP(10.57.17.184)
+		address td01
+		# 端口号
+		port 3002 
+		# 可以使用域名(hostname)例: mesh-seed-address-port jlcw01 3002
+		mesh-seed-address-port td01 3002
+		# 集群模式下其他节点信息(集群才需要配置)
+		#mesh-seed-address-port 10.57.17.185 3002
+		#mesh-seed-address-port 10.57.17.186 3002
+		interval 150
+		timeout 10
+	}
+	fabric {
+		port 3001
+	}
+	info {
+		port 3003
+	}
+}
+
+# 注意:集群内的每个节点有一个配置文件aerospike.conf
+# 每个节点配置文件中的namespace配置参数必须一致
+# too many namespaces (max is 2) 最多两个namespace
+namespace ns1 {
+	# 复制因子,单机环境可配置为1(无需复制),也可用2(不会报错)
+	# 副本越多可靠性越高,写请求会急剧增大,不建议超过3.
+	# 实践中,大部分部署使用的数据因子为2(一个主数据和一个副本)
+	# 无复制数据需要设置复制因子为1(replication factor = 1)
+	replication-factor 2
+	# 内存大小
+	memory-size 400m
+	# 30d 表示30天过期,0表示不过期
+	default-ttl 0
+	storage-engine device {
+		file /home/admin/mw/aerospike/data/ns1.dat
+		# 物理存储文件大小(应至少和内存大小一致)
+		filesize 2G
+		data-in-memory true
+	}
+}
+
+namespace test {
+	replication-factor 1
+	memory-size 400m
+	default-ttl 0
+	storage-engine device {
+		file /home/admin/mw/aerospike/data/test.dat
+		filesize 2G
+		data-in-memory true
+	}
+}
+
+EOF
+
+
+查看配置文件
+sudo vim /etc/aerospike/aerospike.conf
+
+
+2.7.4.	启动服务
+Aerospike常用命令(root用户或者sudo):
+启动( systemctl start aerospike )
+sudo service aerospike start
+重启( systemctl restart aerospike )
+sudo service aerospike restart
+停止( systemctl stop aerospike )
+sudo service aerospike stop
+查看状态( systemctl status aerospike )
+sudo service aerospike status
+
+遇到错误查看状态( -l 显示详细错误信息)
+sudo service aerospike status -l
+或
+查看日志
+less /home/admin/mw/aerospike/logs/aerospike.log
+
+查看服务进程
+ps -ef|grep python
+aerospi+   459     1  0 19:34 ?        00:00:00 /usr/bin/python /opt/aerospike/telemetry/telemetry.py /etc/aerospike/telemetry.conf start --fgdaemon
+
+或直接通过命令查看
+asinfo -v STATUS
+显示为OK表示正常运行
+
+
+登录
+asadm
+使用 exit 命令退出
+或
+aql
+使用 exit 或 quit 命令退出
+
+查看版本
+asinfo -v edition
+
+
+
+
+安装Aerospike监控(AMC)
+安装路径(注意:安装一台机器即可!!!)
+/home/admin/mw/amc
+
+安装操作
+mkdir /home/admin/mw/amc
+cp -r /home/admin/softwares/aerospike-amc-community-4.0.19-1.x86_64.rpm /home/admin/mw/amc
+cd /home/admin/mw/amc
+sudo rpm -ivh aerospike-amc-community-4.0.19-1.x86_64.rpm
+2.8.3.	启动服务
+AMC常用命令:
+启动
+sudo /etc/init.d/amc start
+停止
+sudo /etc/init.d/amc stop
+重启
+sudo /etc/init.d/amc restart
+查看状态
+sudo /etc/init.d/amc status
+
+2.8.4.	使用说明
+启动成功之后访问http://IP:8081/
+例: http://10.57.17.184:8081
+如果是集群模式下,输入某个节点IP即可,点击Connect
+例: 输入: 10.57.17.184  默认3000端口(不改)  然后点击 Connect
+
+
+
+同盾特殊操作:
+脚本上传：
+AMC进入Definitions页面,
+选择UDF单选按钮,
+点击add new UDF file,选择lua脚本文件文件上传即可.
+UDF文件2个：
+tdutil.lua、whtutil.lua
+需确认是否需要上传:
+matchUtil.lua
+
+
+
+
+java客户端案例: https://github.com/aerospike/aerospike-client-java/tree/master/examples
+(必须要java8以上)
+<dependency>
+    <groupId>com.aerospike</groupId>
+    <artifactId>aerospike-client</artifactId>
+    <version>4.3.1</version>
+</dependency>
+
+
+1.客户端接入
+aql 
+
+2.查看数据库
+show namespaces
+
+3.查看表
+show sets
+
+3.查看接入配置
+get all
+
+
+4.执行插入操作(表删除较麻烦,生产别乱建)
+insert into ns1.my_set(pk,id,name,host,port,info) values('my_pk_value','001','Nier','192.168.0.9','10000','运行中')
+insert into ns1.bigDataIndex(pk,indexInfo) values('123','id1,name2,phone3,money')
+
+5.执行查询操作
+aql> select * from my_set
++-------+-------+---------------+---------+-------------+
+| id    | name  | host          | port    | info        |
++-------+-------+---------------+---------+-------------+
+| "001" | "Nier"| "192.168.0.9" | "10000" | "运行中" 	|
++-------+-------+---------------+---------+-------------+
+
+6.表清理(linux命令行执行: aql -c "TRUNCATE ns1" 全部清理)
+TRUNCATE ns1.my_set
+
+7.查询
+select * from ns1.my_set
+
+8.执行删除操作
+delete from my_set where pk='my_pk_value'
+
+9.执行查询操作
+select * from my_set
+
+
+使用MAP数据格式
+insert into ns1.systemConfig (PK, configMap, updateTime) values ('httpTimeOut', MAP('{"connectTimeOut":40000, "socketTimeOut":40000}'), '2019-08-07')
+select * from ns1.systemConfig where pk='httpTimeOut'
+delete from ns1.systemConfig where pk='httpTimeOut'
+
+
+
+使用LIST数据格式
+delete from ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_ENT'
+delete from ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL'
+
+先插入一条空数据,指定数据类型为 LIST
+insert into ns1.preloanmodel_inner_score(pk,list) values('FORM_LOCALSCORE_PERSONAL',List('[]'))
+
+OPERATE LIST_APPEND(list,MAP('{"target_name": "客户年龄分", "weight":"30%","value_field":"N_DC_VB_AGE","score_field":"F_DC_VB_AGESCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL' on ns1.preloanmodel_score where pk='list_key'
+OPERATE LIST_APPEND(list,MAP('{"target_name": "客户性别分", "weight":"10%","value_field":"S_DC_VB_SEX","score_field":"F_DC_VB_SEXSCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL' on ns1.preloanmodel_score where pk='list_key'
+或(多条通过逗号进行分割)
+OPERATE LIST_APPEND(list,MAP('{"target_name": "客户年龄分", "weight":"30%","value_field":"N_DC_VB_AGE","score_field":"F_DC_VB_AGESCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL',OPERATE LIST_APPEND(list,MAP('{"target_name": "客户性别分", "weight":"10%","value_field":"S_DC_VB_SEX","score_field":"F_DC_VB_SEXSCORE"}')) on ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL' on ns1.preloanmodel_score where pk='list_key'
+
+select * from ns1.preloanmodel_inner_score where pk='FORM_LOCALSCORE_PERSONAL';
+
+
+
+
+
+
+ascli -h ip -p port udf-put updateIntt.lua
+
+创建testudf.lua文件:(分割字符串方法)
+
+local function Split(szFullString, szSeparator) --此方法为Split字符串
+  local nFindStartIndex = 1
+  local nSplitIndex = 1
+  local nSplitArray = {}
+  while true do
+    local nFindLastIndex = string.find(szFullString, szSeparator, nFindStartIndex)
+    if not nFindLastIndex then
+      nSplitArray[nSplitIndex] = string.sub(szFullString, nFindStartIndex, string.len(szFullString))
+      break
+    end
+    nSplitArray[nSplitIndex] = string.sub(szFullString, nFindStartIndex, nFindLastIndex - 1)
+    nFindStartIndex = nFindLastIndex + string.len(szSeparator)
+    nSplitIndex = nSplitIndex + 1
+  end
+  return nSplitArray
+end
+
+function updateIntt(rec,appendIntt,sqid)--rec参数为Aerospike当前记录本身，默认就传递进来的，后面两参数是具体的业务参数
+  local ret = map()
+
+  if not aerospike:exists(rec) then--判断rec记录是否存在
+      ret['status'] = 'DOES NOT EXIST'
+      rec['sqid'] = sqid['sqid']
+      rec['intt'] = appendIntt['appendIntt']
+      aerospike:create(rec)--不存在则创建一个新的key, 属性为sqid和intt
+  else--key存在则更新intt属性的值
+      --ret['status'] = 'DOES EXIST'
+      local intt = rec['intt']
+      if intt == nil then
+          --rec['sqid'] = userid['userid']
+          rec['intt'] = appendIntt['appendIntt']
+          ret['status'] = 'INTT DOES NOT EXIST'
+    ret['intt'] = appendIntt['appendIntt']
+      else
+          ret['status'] = 'INTT DOES EXIST'
+    local intt = rec['intt']
+    local appendIntt = appendIntt['appendIntt']
+    local list = Split(appendIntt, ':')
+    local l1 = list[1] .. ':'
+    if string.find(intt, l1) ~= nil then
+    ret['status'] = 'appendIntt is old'
+    local l2 = list[2]
+    --local list2 = Split(intt, ':')
+    ret['l2'] = l2
+    else
+    ret['status'] = 'appendIntt is new'
+    rec['intt'] = intt .. ',' .. appendIntt
+    ret['intt'] = intt .. ',' .. appendIntt
+    end   
+      end
+      aerospike:update(rec)--修改
+  end
+  --aerospike:update(rec)
+  return ret
+end
+
+
+
+通过shell脚本执行
+#!/bin/bash
+
+aql <<EOF
+show sets;
+
+EOF
+
+通过命令执行
+aql -c "insert into ns1.bigDataIndex (PK, configMap, updateTime) values ('httpTimeOut', MAP('{\"connectTimeOut\":40000, \"socketTimeOut\":40000}'), '2019-08-07')";
+aql -c "insert into ns1.bigDataIndex (PK, indexInfo) values ('360702199210311610', '360702199210311610')";
+aql -c "select * from ns1.bigDataIndex where PK='360702199210311610'";
+
+
+
+
+
+
+insert into ns1.bigDataIndex(pk,indexInfo) values('360702199210311610','testValue')
+
+
+
+
+
+
+
+
+
+
+

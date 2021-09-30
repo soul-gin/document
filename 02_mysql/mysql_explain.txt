@@ -1,0 +1,134 @@
+
+1.引擎
+查看支持引擎(5.7版本mysql有9种引擎)
+SHOW ENGINES;
+
+查看默认的环境变量
+SHOW VARIABLES LIKE '%storage_engine%';
+
+
+InnoDB
+特点:行级锁(适合高并发),支持事务(start transaction),支持外键
+
+外键:
+CONSTRAINT '外键名' FOREIGN KEY(当前表列名) REFERENCES 外键表名(外键表关联的列名) ON DELETE RESTRICT ON UPDATE CASCADE
+-- ON DELETE RESTRICT 删除主表行时,校验附表是否引用了主表外键中的值
+-- ON UPDATE CASCADE  更新主表行外键值时,同步更新附表中使用到该外键所有行的外键值
+
+存储格式:
+.frm  存储表结构
+.ibd  存储数据文件,索引文件
+
+MyISAM
+特点:不支持事务(读写快,更新删除操作少,并且对事物完整性,并发性要求不高),表级锁,支持快速模糊查询
+
+存储格式:
+.frm  存储表结构
+.MYD  存储数据文件(MYData)
+.MYI  索引文件(MYIndex)
+
+MEMORY
+特点:默认使用HASH索引,访问数据快,但是服务一旦关闭表中数据容易丢失
+
+存储格式:
+.frm  存储表结构
+内存  存储数据文件
+
+
+MERGE
+特点:实际上是一组MyISAM表的组合,每个MyISAM的表的字段是一致的;所有的增删改查均在每个MyISAM表中处理;
+	 MERGE本身并不存储数据(好比MERGE相当于一张主表,而每个MyISAM是它的分区表,也类似视图)
+	 适合数据仓库,突破单表存储容量限制
+	 
+
+2.sql优化
+
+查看当前数据库哪种操作次数多:
+SHOW STATUS LIKE 'Com_______';
+全局数据库:
+SHOW GLOBAL STATUS LIKE 'Com_______';	
+
+展示为:
+Com_binlog	0
+Com_commit	3536719
+Com_delete	17036
+Com_insert	136786
+Com_repair	0
+Com_revoke	0
+Com_select	7732329
+Com_signal	0
+
+一般系统的80-90%的操作为查询
+
+查看各种操作对应的数据行数:
+SHOW STATUS LIKE 'Innodb_row_%';
+SHOW GLOBAL STATUS LIKE 'Innodb_row_%';
+
+展示为:
+Innodb_row_lock_current_waits	0
+Innodb_row_lock_time	5209
+Innodb_row_lock_time_avg	1736
+Innodb_row_lock_time_max	3006
+Innodb_row_lock_waits	3
+Innodb_rows_deleted	28268
+Innodb_rows_inserted	1973364
+Innodb_rows_read	210192297
+
+
+定位低效sql:
+慢查询日志:
+--log-slow-queries[=file_name] 选项进行启动
+
+查看是否开启慢查询日志:
+show variables like 'slow_query_log'
+
+命令实时查看:
+show processlist
+
+explain查看执行计划
+explain sql语句
+
+explain的id列
+id相同的可以认为是一组,从上往下执行
+id不同id值越大,优先级越高,越先被执行
+id有相同,也有不同,同时存在.id相同的可以认为是一组,从上往下执行;在所有的组中,id的值越大,优先级越高,越先执行.
+
+explain的select_type列
+
+依次从好到差：
+select_type列常见的有：
+
+A：simple：表示不需要union操作或者不包含子查询的简单select查询。有连接查询时，外层的查询为simple，且只有一个
+
+B：primary：一个需要union操作或者含有子查询的select，位于最外层的单位查询的select_type即为primary。且只有一个
+
+C：union：union连接的两个select查询，第一个查询是dervied派生表，除了第一个表外，第二个以后的表select_type都是union
+
+D：dependent union：与union一样，出现在union 或union all语句中，但是这个查询要受到外部查询的影响
+
+E：union result：包含union的结果集，在union和union all语句中,因为它不需要参与查询，所以id字段为null
+
+F：subquery：除了from子句中包含的子查询外，其他地方出现的子查询都可能是subquery
+
+G：dependent subquery：与dependent union类似，表示这个subquery的查询要受到外部表查询的影响
+
+H：derived：from字句中出现的子查询，也叫做派生表，其他数据库中可能叫做内联视图或嵌套select
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

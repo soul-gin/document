@@ -1,0 +1,215 @@
+
+nginx集群一般能支持200W左右的并发
+
+nginx了解视频
+https://edu.51cto.com/course/3375.html
+
+列出系统服务是否运行了nginx
+chkconfig --list|grep nginx
+
+查看是否已经安装了nginx,如果未显示信息,那么说明没有安装
+rpm -qa|grep nginx
+
+nginx的卸载(慎用 yum remove 会卸载关联程序, rpm -e --nodeps 卸载(--nodeps可以忽略关联程序))
+yum remove nginx
+
+添加nginx使用的用户
+groupadd admin;
+useradd -g admin admin;
+
+sudo chmod +w /etc/sudoers(使用有sudo权限用户或直接 su root)
+sudo vim /etc/sudoers
+在文件最后添加如下内容：
+# add privilege for admin
+
+admin ALL=(ALL) ALL
+
+# end
+
+1.由于nginx是c语言编写的,不能跨平台,开发者提供的是nginx的源代码
+	注意:下面的环境如果不确定是否安装了,可以直接执行 yum install 命令,
+	没有则会安装,有会检查是否最新,不是则会更新
+	--> 安装gcc环境(用于编译源代码)
+		rpm -qa|grep gcc-c++ 检查是否安装了gcc-c++
+		安装
+		yum install -y gcc-c++
+		
+	--> 安装第三方开发包 给nginx运行 提供运行环境
+		perl库,包括perl兼容的正则表达式库
+		rpm -qa|grep pcre 检查是否安装了 pcre-devel(一般pcre-7.8-7.el6.x86_64已安装)
+		那么需要安装pcre-devel
+		yum install -y pcre pcre-devel
+		
+		nginx使用的是zlib库,对http包的内容进行gzip
+		yum install -y zlib zlib-devel
+		
+		openssl强大的安全套接字层密码库,攘括密码算法,密钥,证书封装管理功能及SSL协议
+		rpm -qa|grep openssl-devel 检查是否安装了 openssl-devel
+		yum install -y openssl openssl-devel
+		
+		最后确认安装环境信息是否完整
+		rpm -qa gcc-c++ pcre pcre-devel openssl openssl-devel zlib zlib-devel
+		
+2.安装nginx
+	安装包目录,解压暂存文件目录
+	mkdir -p /home/admin/softwares
+	实际安装目录
+	mkdir -p /home/admin/mw/nginx-1.15.5
+	cd /home/admin/softwares
+	从官网下载nginx压缩包 或者直接上传
+	wget -q http://nginx.org/download/nginx-1.15.5.tar.gz
+	注意:这里是解压到softwares目录,然后安装目录在后面的configure中指定
+	tar zxvf /home/admin/softwares/nginx-1.15.5.tar.gz -C /home/admin/softwares/
+	安装tree指令,可查看文件结构树
+	yum install -y tree
+	tree /home/admin/softwares/nginx-1.15.5 --charset ASCII
+	如果嫌 --charset ASCII麻烦,可以使用别名
+	alias tree='tree --charset ASCII'  (重启失效)
+	定义别名永久生效:
+	全局生效(修改 vi /etc/profile,将 alias tree='tree --charset ASCII' 加入即可)
+	source /etc/profile
+	
+	查看编译安装可用参数
+	/home/softwares/nginx-1.15.5/configure --help
+	然后执行下面命令( \ 代表换行),会生成一个Makefile文件
+	(如果想要更安全,可以建立虚拟用户,让nginx使用: useradd nginx -s /sbin/nologin -M;  可以使用 id nginx检查刚创建的用户)
+	
+./configure \
+--prefix=/home/admin/mw/nginx-1.15.5 \
+--user=admin \
+--group=admin \
+--with-http_gzip_static_module \
+--with-http_ssl_module \
+--with-http_stub_status_module
+	
+	使用 echo $?  查看是否有报错信息,显示 0 表示没有
+	
+	执行完毕后(查看是否多了个Makefile文件)
+	ll (或ls)
+	
+	编译
+	make
+	
+	安装
+	make install
+	
+	设置软连接,方便平时查看和使用(安装目录需要带版本号以便直观了解版本信息,但是不方便tab操作输入名称)
+	cd /home/admin/mw/
+	ln -s /home/admin/mw/nginx-1.15.5 /home/admin/mw/nginx
+	
+	/home/admin/mw/nginx就相当于/home/admin/mw/nginx-1.15.5的一个快捷方式,便于查看
+	
+	
+3.启动nginx
+	查看版本号,以及安装时的 ./configure 参数
+	/home/admin/mw/nginx/sbin/nginx -V
+	启动
+	sudo /home/admin/mw/nginx/sbin/nginx
+	查看
+	ps -ef|grep nginx
+	关闭(或者 kill -9 )
+	/home/admin/mw/nginx/sbin/nginx -s stop
+	重启前检查配置是否正确
+	/home/admin/mw/nginx/sbin/nginx -t
+	重启
+	/home/admin/mw/nginx/sbin/nginx -s reload
+	查看nginx端口( ss -lntup|grep 80  就可以查看80端口被谁占用了)
+	ss -lntup|grep nginx
+		显示 ( tcp  LISTEN  0  128   *:80   *:*      users:(("nginx",81156,6),("nginx",81171,6)) )
+	查看nginx端口是否可以访问
+	curl 127.0.0.1
+		显示nginx欢迎页面.html就是成功了
+	#查看防火墙状态	
+	sudo systemctl status firewalld 
+	#关闭防火墙	
+	sudo systemctl stop firewalld
+	#关闭开机自动启动防火墙功能
+	sudo systemctl disable firewalld  
+	
+4.nginx部署
+	cd /home/admin/mw/nginx/
+	了解nginx目录结构
+	ls -l
+	可以看到一些以 _temp 结尾的目录,是一些临时文件存放的地方
+	
+	查看目录,过滤掉名称中含有temp的文件
+	ls -l|grep -v temp
+	可以看到 conf(配置文件)  html(默认网站目录)  logs(日志,pid)  sbin(启动命令) 四个文件夹
+	
+	查看nginx.conf配置中和root相关的,可以发现 root 是html文件夹(是个相对路径,相对于nginx的安装路径)
+	grep root /home/admin/mw/nginx/conf/nginx.conf
+
+	查看和 80 端口相关的信息
+	lsof -i :80
+	
+	查看nginx.conf详细配置
+	less /home/admin/mw/nginx/conf/nginx.conf
+	最小化配置文件(删除注释,便于查看,修改) 去除包含 # 的行,以及 ^(表示空行)
+	将nginx.conf.default去除#行和空行后的结果输出到nginx.conf
+	egrep -v "#|^$" /home/admin/mw/nginx/conf/nginx.conf.default >nginx.conf
+
+# 配置work进程数,一般配置和CPU核心数相等
+worker_processes  1;
+# 记录错误日志
+error_log  logs/error.log;
+# 管理进程,有问题就可以直接杀pid
+pid        logs/nginx.pid;
+# 每个work的最大连接数,可以同时处理多少请求(那总的最大连接数就是 worker_processes * worker_connections)	
+events {
+    worker_connections  1024;
+}
+	
+http {
+	# nginx支持的媒体类型库文件包含:    mime 类型
+    include       mime.types;
+	# 默认媒体类型类型
+    default_type  application/octet-stream;
+
+	# 是否开启高效文件传输
+    sendfile        on;
+	# 连接超时时间
+    keepalive_timeout  65;
+
+	# 一个server标签就是一个独立的虚拟主机站点
+    server {
+		# 监听的端口号(提供服务的端口号)
+        listen       80;
+		# 提供服务的域名 主机名 或 IP
+        server_name  localhost;
+		# 请求寻址( / 表示匹配所有请求)
+        location / {
+			# 站点目录,相对于nginx的安装目录(一般存放静态资源文件)
+            root   html;
+			# 默认的首页文件,多个用空格分开
+            index  index.html index.htm;
+        }
+
+		#出现对应的http状态码使用50x.html回馈
+        error_page   500 502 503 504  /50x.html;
+		# 使用 = 会优先匹配,优先于 / 的匹配
+        location = /50x.html {
+			#指定对应的站点目录是名为html文件夹(相对路径,相对nginx)
+            root   html;
+        }   
+    }
+}
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

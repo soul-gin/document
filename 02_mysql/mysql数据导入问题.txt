@@ -1,0 +1,37 @@
+
+导入数据时报Got a packet bigger than 'max_allowed_packet' bytes
+
+-- 简单来说就是mysql把当前执行的mysql语句看作是一个包，而对这个包大小(max_allowed_packet)的限制是对当前mysql语句长度的限制。
+show VARIABLES like '%max_allowed_packet%';
+
+-- （注意，这里的大小只能填写字节。重启mysql服务后，配置将会失效！）
+ set global max_allowed_packet = 大小;  
+ 
+ 
+ 
+mysql数据库备份
+mysqldump -u [uname] -p[pass] –databases [dbname][dbname2] > [backupfile.sql]
+
+不备份数据
+mysqldump -u tongdun -p --no-data atreus2.2 > backup0527.sql
+
+常规备份
+mysqldump -u tongdun -p atreus > atreus0709.sql
+密码:
+td@2019
+
+
+针对生成的sql文件中,单条sql过大,会导致mysql不能执行(单条sql默认最大4M),
+而备份时为了能压缩sql文件大小,一般都会多条Insert合并为一条,导致单条sql比较大
+
+windows修改my.ini
+在[mysqld]下添加(具体值看sql文件大小,
+或者在navicat导入时不要勾选每个运行行中运行多重查询,以免开了太多线程执行了整个sql文件,导致达到mysql max_allowed_packet限制)
+
+max_allowed_packet=64M
+
+linux修改/etc/my.cnf
+
+vi /etc/my.cnf
+然后添加(在[mysqld]下面)
+max_allowed_packet=64M

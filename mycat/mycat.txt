@@ -1,0 +1,35 @@
+启动mycat
+   sh /usr/local/mycat/bin/mycat console
+查看日志(需要新建窗口new windows)
+   tail -f /usr/local/mycat/logs/mycat.log
+关闭
+   sh /usr/local/mycat/bin/mycat stop
+   
+
+在mycat上存(根据id分片,schema上配置了3个节点) id = 五百万的数据  
+INSERT INTO TB_ITEM(ID,TITLE,SELL_POINT,PRICE,NUM,BARCODE,IMAGE,CID,STATUS,CREATED,UPDATED) VALUES ('5000000', 'new2 - 阿尔卡特 (OT-927) 炭黑 联通3G手机 双卡双待', '清仓！仅北京，武汉仓有货！', '29900000', '99999', '', 'http://image.taotao.com/jd/4ef8861cf6854de9889f3db9b24dc371.jpg', '560', '1', '2015-03-08 21:33:18', '2015-04-11 20:38:38');
+(会存在第一个数据节点)
+
+五百万零一 存到第二个节点
+INSERT INTO TB_ITEM(ID,TITLE,SELL_POINT,PRICE,NUM,BARCODE,IMAGE,CID,STATUS,CREATED,UPDATED) VALUES ('5000001', 'new2 - 阿尔卡特 (OT-927) 炭黑 联通3G手机 双卡双待', '清仓！仅北京，武汉仓有货！', '29900000', '99999', '', 'http://image.taotao.com/jd/4ef8861cf6854de9889f3db9b24dc371.jpg', '560', '1', '2015-03-08 21:33:18', '2015-04-11 20:38:38');
+
+存到第三个节点
+INSERT INTO TB_ITEM(ID,TITLE,SELL_POINT,PRICE,NUM,BARCODE,IMAGE,CID,STATUS,CREATED,UPDATED) VALUES ('15000000', 'new2 - 阿尔卡特 (OT-927) 炭黑 联通3G手机 双卡双待', '清仓！仅北京，武汉仓有货！', '29900000', '99999', '', 'http://image.taotao.com/jd/4ef8861cf6854de9889f3db9b24dc371.jpg', '560', '1', '2015-03-08 21:33:18', '2015-04-11 20:38:38');
+
+
+插入id为一千五百万零一的id,那么数据库会报错,已经没有节点来存了
+INSERT INTO TB_ITEM(ID,TITLE,SELL_POINT,PRICE,NUM,BARCODE,IMAGE,CID,STATUS,CREATED,UPDATED) VALUES ('15000001', 'new2 - 阿尔卡特 (OT-927) 炭黑 联通3G手机 双卡双待', '清仓！仅北京，武汉仓有货！', '29900000', '99999', '', 'http://image.taotao.com/jd/4ef8861cf6854de9889f3db9b24dc371.jpg', '560', '1', '2015-03-08 21:33:18', '2015-04-11 20:38:38');
+
+说明mycat每个节点可以存储500万条数据,超过节点能存储的范围就需要扩展节点了
+
+
+
+
+
+
+
+
+
+
+
+

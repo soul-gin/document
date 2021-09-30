@@ -1,0 +1,12 @@
+﻿
+# 安装git
+yum install -y git
+# 创建存放公钥的文件夹
+mkdir /home/git/.ssh/authorized_keys
+# 备份用户公钥
+把C:\Users\86181\.ssh\id_rsa.pub文件导入到/home/git/.ssh/authorized_keys
+# 这里elasticjob就是你需要自定义的文件夹的名称,初始化git服务
+git init --bare elasticjob.git
+# 远程下载linux上的elasticjob文件夹
+git clone git@192.168.25.161:/home/git/repository/elasticjob.git
+# 显示远程为空文件夹,这时候把需要的文件添加进去,再add,commit&push即可

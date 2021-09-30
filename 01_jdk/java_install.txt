@@ -1,0 +1,27 @@
+2.2.	安装JDK(1.8)
+2.2.1.	安装路径
+/usr/local/jdk1.8.0_191
+
+2.2.2.	安装操作
+以下操作均为admin用户操作。
+卸载centos7中自带的openjdk
+$ rpm -qa | grep java
+$ sudo rpm -e --nodeps java-1.8.0-openjdk-headless-1.8.0.161-2.b14.el7.x86_64 java-1.8.0-openjdk-1.8.0.161-2.b14.el7.x86_64 
+$ cd ~   （说明：回到当前用户目录下，例如admin用户/home/admin）
+$ cd /home/tongdun/softwares/jdk
+$ sudo tar -xvzf /home/tongdun/softwares/jdk/jdk-8u191-linux-x64.tar.gz -C /usr/local/
+
+2.2.3.	修改配置
+$ sudo vi /etc/profile
+
+# java environment begin
+JAVA_HOME=/usr/local/jdk1.8.0_191
+CLASSPATH=$JAVA_HOME/lib/
+PATH=$PATH:$JAVA_HOME/bin
+export PATH JAVA_HOME CLASSPATH
+# java environment end
+
+$ source /etc/profile  使配置生效
+
+查看
+java -version

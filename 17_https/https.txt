@@ -1,0 +1,104 @@
+
+
+#### linux生成证书
+```shell
+#1.建立服务器私钥, 生成RSA秘钥
+#会有两次要求输入密码(123456)
+cd ~
+openssl genrsa -des3 -out server.key 2048
+
+#然后获得了一个server.key文件
+cat server.key
+
+#2.以后使用此文件(通过openssl提供的命令或API)可能经常回要求输入密码,如果想去除输入密码的步骤可以使用以下命令:
+openssl rsa -in server.key -out server.key
+
+#3.创建服务器证书的申请文件server.csr( 国家填 CN, 主机名随意, 密码自定义, 其他可以不填)
+openssl req -new -key server.key -out server.csr
+
+#4.复制server.key, 用于ssl加密备用
+cp server.key server.key.org
+
+#5.对于上面的秘钥进行ssl加密
+openssl rsa -in server.key.org -out server.key
+
+
+#6.使用上面的秘钥和CSR对正式进行签名
+创建自当前日期起有效期为期十年的服务器证书(server.crt)
+openssl x509 -req -days 3650 -in server.csr -signkey server.key -out server.crt
+
+```
+
+#### nginx测试
+```shell
+#1.可选(将 server.crt, server.key 拷贝至 /home/admin/mw/https/ 目录下)
+
+#2.配置信息如下:( 注意如果是 80 443这种端口需要root启动nginx )
+
+#user  nobody;
+worker_processes  1;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+
+    server {
+        listen       8080;
+        server_name  localhost;
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+
+    }
+
+    # HTTPS server
+    server {
+        listen       443 ssl;
+        server_name  www.gin.com;
+
+        #证书
+        ssl_certificate      /home/admin/mw/https/server.crt;
+        #密钥
+        ssl_certificate_key  /home/admin/mw/https/server.key;
+
+        ssl_session_cache    shared:SSL:1m;
+        ssl_session_timeout  5m;
+
+        ssl_ciphers  HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers  on;
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+    }
+}
+
+```
+
+#### 测试
+ip替换成对应nginx所在服务器
+1. 正常
+https://192.168.25.109/
+http://192.168.25.109:8080/
+2. 无法访问
+https://192.168.25.109:8080/
+
+
+
+
+
+

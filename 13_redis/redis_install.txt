@@ -1,0 +1,899 @@
+redis节点投票机制（至少需要三台master，不然2台无法达到超过半数的票数）
+1.如果半数以上的master都挂掉了，那么整个集群会停止工作（因为只有master才有投票的权利，slave没有投票权利）
+2.如果一个节点被投票为fail connect节点，并且该节点slave也挂了，那么整个redis集群会停止工作
+
+
+查询需要数据问题:
+1.从文件获取数据,单个文件的全量IO(主要问题),寻址,带宽,
+2.从数据库获取数据,解决了文件获取数据的全量IO问题,使用和系统一致的4KB的datapage存储数据格子
+并对数据格子进行索引(原理:分而治之(schema固定数据格式,每行空列也占用数据空间,便于偏移量跳跃查询(行偏移)),
+索引路由(数据量比内容更小,遍历更快;B+树,树干在内存中,叶子在硬盘(降低IO次数,提高叶子节点查询数据)))
+索引大概多少合适?
+最好不超过6个,索引也是数据,索引越多占用越多空间
+随着数据库单表数据量越来越大,数据库操作会越来越慢?
+增删改一定会变慢,查(如果走的是索引,速度基本一致;在高并发情况下,复杂查询那么速度会受到影响)
+3.SAP HAHA 内存关系型数据库(sql),数据全存储在内存中(成本很高)
+4.折中方案(热点数据存储在内存中),设计为k-v模式(键值对查询速度快;另估计考虑到是部分数据,不适合做关联查询(约束表数据不全))
+
+
+磁盘
+1.寻址(找到文件所在的磁道,再找到对应扇区)  ->  ms级别
+2.带宽  ->  百兆
+
+内存
+1.寻址  ->  ns级别
+
+
+准备:
+官网下载redis 或 wget 获取
+wget download.redis.io/releases/redis-5.0.8.tar.gz
+
+解压并查看安装步骤
+tar -zxvf redis-5.0.8.tar.gz	
+
+查看 redis-5.0.8/README.md 及 Makefile 文件,即可了解其安装方式(中间件安装均可这么研究)
+README.md中表示需先 make 编译; 再进行安装
+Makefile 文件中,make install命令对应切换到src目录,并使用src下面的Makefile执行 make install ($@表示执行命令的参数 install )
+install:
+        cd src && $(MAKE) $@	
+		
+查看 src/Makefile 可以看到 PREFIX?=/usr/local 
+这表示如果make存在 PREFIX 参数值则使用它的值,否则使用默认的 /usr/local
+
+
+安装redis
+	--> 创建redis实际安装目录
+		mkdir /home/admin/mw -p
+		
+	--> 准备安装文件(上传或wget)
+		mkdir /home/admin/softwares -p
+		cd /home/admin/softwares/
+		tar -zxvf redis-5.0.8.tar.gz
+		 
+	--> 安装c语言环境 
+		yum install gcc-c++ -y
+	
+	--> 编译redis( 如果编译失败,需要重新编译,则需执行 make distclean 来清理历史数据)
+		cd /home/admin/softwares/redis-5.0.8/
+		make  			  (执行make命令,源码包通过gcc进行c语言的编译)
+
+	--> 安装redis(并指定安装目录,安装成功之后,/home/admin/softwares/redis-5.0.8/编译文件可以删除)
+		(/home/admin/softwares/redis-5.0.8/ 目录下的 Makefile 会帮我们切换到 src 下执行)
+		make PREFIX=/home/admin/mw/redis5 install
+		
+	--> 配置环境变量(为了能够不需要找到对应中间件目录去启动,可以将中间件安装目录均配置到 PATH )
+		(注意:系统配置的各种HOME在前面, export PATH=$PATH:$REDIS_HOME 应该在最后,通过:(冒号)分割
+		vi /etc/profile
+		
+		export REDIS_HOME=/home/admin/mw/redis5
+		export PATH=$PATH:$REDIS_HOME/bin
+		
+		source /etc/profile
+		
+	--> 启动(服务器)
+		(将redis-3.0.7目录下的redis.conf文件复制到 /admin/mw/redis5/bin 下)
+		cp redis.conf /home/admin/mw/bin/    (#此时 bin目录下会多出一个dump.rdb,相当于redis备份)
+		
+	
+	--> 修改redis/**bin**目录下的redis.conf 设置为 后台启动, 改的是bin里面的这个配置
+		cd .. 
+		cd bin
+		vi redis.conf  
+	
+	--> 进入到编辑redis.conf文件页面后，输入/表示查找 
+		/daemonize  
+	
+	--> 将 daemonize 值改成yes即可(修改成后端启动模式) 
+		:wq
+		
+	--> 启动(服务器)
+		cd /admin/mw/bin
+		./redis-server redis.conf
+		
+	--> 使用redis的客户端连接redis服务器
+		cd /admin/mw/bin
+		./redis-cli
+	
+	--> 连接指定主机 指定端口号(同理需要放行端口6379或者关闭防火墙)
+		./redis-cli -h 192.168.25.128 -p 6379
+		
+	--> 关闭服务
+		kill -9 pid
+	
+	--> 已经登录客户端,执行
+		shutdown
+		
+	--> 或者没有登录客户端情况下,执行
+		./redis-cli -h ip地址  -p port shutdown
+		
+		
+		
+		
+		
+		
+redis基本命令
+
+设置(存值)
+    set key value
+	
+获取指定的key对应的值	
+    get key
+
+删除指定的key	
+    del key
+
+测试是否连接成功	
+    ping
+	
+退出	
+    quit
+	
+查看所有key
+	keys *
+	
+使某个key的值增加1(不能对非整数进行加1操作)
+	incr key
+
+
+	
+创建(哈希set  hashset)
+	hset 哈希set名称  哈希set的字段名称  字段对应的值
+	hset hash_nier field1 1 
+	hset hash_nier field2 2
+	hset hash_nier field3 3 
+	
+获取(哈希set  hashset)的值
+	hget 哈希set名称  哈希set的字段
+	hget hash_nier field
+	
+查看(哈希set  hashset)的集合
+	hkeys 哈希set名称  (取字段)
+	hkeys hash_nier
+	
+	hvals 哈希set名称  (取值)
+	hvals hash_nier
+	
+	hgetall 哈希set名称  (取字段和值)
+	hgetall hash_nier
+	
+删除(哈希set  hashset)的集合字段
+	hdel 哈希set名称  哈希set的字段名称
+	hdel hash_nier field1
+	
+删除(哈希set  hashset)的集合
+	del 哈希set名称 	(即和一般删除一样)
+	
+	
+	
+list从左边添加
+	lpush list_nier 1 2 3 4 5 6 
+	(即从第一个数字开始,每个数字都放在list的左边第一个的位置,取出顺序与插入相反)
+	
+list从右边添加
+	rpush list_nier a b c d e f
+	(即从第一个数字开始,每个数字都放在list的右边第一个的位置,取出顺序与插入相同)	
+	
+查看list中元素
+	lrange list_nier 0 -1  
+	(-1表示查询所有,不然就是写什么数字查到哪个数字,-2会查到倒数第二个,即最后一个不查)
+	
+取list的元素(取出来了就没了)
+	rpop list_nier  从右边取一个
+	lpop list_nier  从左边取一个
+	
+	
+	
+	
+添加set集合
+	sadd set_nier a a b b c c d d    (set可以用来去重)
+	sadd set_luffy c c d d e f
+	
+删除set中元素
+	srem set_nier a
+	
+查询set中元素
+	smembers set_nier
+	
+取交集
+	sinter set_nier set_luffy
+
+取差集	(前面的集合减去后面集合的元素,还剩下的元素)
+	sdiff set_nier set_luffy
+	
+取并集
+	sunion set_nier set_luffy 
+	
+	
+	
+迫不得已情况下才用zset(排序的set) 建议尽量使用hashset set list
+创建zset 
+	zadd 分数 元素 (按分数从小到大排序)
+	zadd zsetnier 1 a 3 b 2 c 5 d
+	
+查询zset中元素	
+	zrange zsetnier 0 -1
+	
+删除元素
+	zrem zsetnier a
+	
+使zset为降序排列(默认升序)
+	zrevrange zsetnier 0 -1
+	
+使zset为降序排列并查出分数
+	zrevrange zsetnier 0 -1 withscores	
+	
+	
+	
+设置key的有效期	
+	expire key 时间(秒)
+	expire nier 100
+	
+查看key的有效期
+	ttl key  (看到正数表示在倒计时,-1为永久保存,-2说明key不存在了)
+	ttl nier
+	
+	
+	
+	
+	
+	
+	
+redis-cluster	(redis集群)
+(redis-cluster没有集群管理工具,通过投票实现 容错 : 所有节点都彼此相互连接,
+当有一个节点挂了(另一个节点不能被当前节点连接,就会发起节点投票,
+当票数超过一半,那么就宣告那个节点挂了)如果没有备份,那么集群就都停止工作了)
+因为需要超过半数,所以至少3个redis服务
+
+
+
+redis伪集群搭建(一台服务器,通过端口号来区分) (真实集群是多台服务器,通过IP区分)
+	1.创建6个redis实例(在一台服务器上)(复制6份redis : 所有文件都在redis/bin目录下)
+		cd /admin/mw/
+		mkdir ../redis-cluster
+		cp redis/bin redis-cluster/redis01 -r
+	
+		删除之前残留的数据
+		cd redis-cluster/redis01
+		rm -f appendonly.aof
+		rm -f dump.rdb
+		vi redis.conf		
+		(/port 	寻找port节点,将6379改为7001)
+		(/cluster-enabled 将/cluster-enabled yes 的注释#去掉,使之生效)
+		:wq 即可
+		
+		cd /usr/local
+		cp -r redis-cluster/redis01 redis-cluster/redis02 
+		cp -r redis-cluster/redis01 redis-cluster/redis03 
+		cp -r redis-cluster/redis01 redis-cluster/redis04 
+		cp -r redis-cluster/redis01 redis-cluster/redis05 
+		cp -r redis-cluster/redis01 redis-cluster/redis06 
+	
+		每份都要修改port和cluster-enabled
+		cd /admin/mw-cluster/redis02
+		vi redis.conf		
+		(/port 	寻找port节点,将6379改为7001)
+		(/cluster-enabled 将/cluster-enabled yes 的注释#去掉,使之生效)
+		:wq 即可
+		
+		cd /admin/mw-cluster/
+		
+	2.创建6个redis实例的 批处理文件
+		vi start-all.sh
+		添加以下内容(如果老是报错,手敲前三行,再直接复制手敲的)
+cd redis01
+./redis-server redis.conf
+cd ..
+cd redis02
+./redis-server redis.conf
+cd ..
+cd redis03
+./redis-server redis.conf
+cd ..
+cd redis04
+./redis-server redis.conf
+cd ..
+cd redis05
+./redis-server redis.conf
+cd ..
+cd redis06
+./redis-server redis.conf
+cd ..
+	
+	    给start-all.sh授予可执行文件的权限
+		chmod u+x start-all.sh 
+		执行
+		cd /admin/mw-cluster
+		./start-all.sh 
+		查看
+		ps aux|grep redis	(可以看到7001-7006)
+	
+		cd /admin/mw/redis-3.0.7/src		(在redis解压后的源代码中)
+		ll *.rb  (查看到redis-trib.rb脚本(ruby语言写的),并复制到集群总文件夹下)
+		cp redis-trib.rb /admin/mw-cluster/
+		
+		搭建ruby运行环境
+		yum install ruby
+		yum install rubygems
+		
+		将S:\Software_For_vms\redis下面的redis-3.0.7.gem 第三方运行环境包传到linux的soft中
+		点击"File" 选择 "Connect SFTP session"
+	    在SFTP窗口 输入 cd /soft 并拖拽redis-3.0.7.gem上传
+		传输完毕之后
+		cd /soft
+		cp redis-3.0.7.gem /admin/mw-cluster
+		cd /admin/mw/
+		cp -r redis-3.0.7 /admin/mw-cluster
+		cd /admin/mw-cluster/
+		gem install redis-3.0.7		
+		(https://rubygems.org/gems/redis/versions/3.0.7 点击右侧的下载文字即可下载)
+		(上面是3.0.7 也可以选其他版本进行下载)
+		
+		使用ruby脚本搭建集群。
+	./redis-trib.rb create --replicas 1 192.168.25.128:7001 192.168.25.128:7002 192.168.25.128:7003 192.168.25.128:7004 192.168.25.128:7005 192.168.25.128:7006
+	
+	出现下列异常解决方法(经验:直接删除redis-cluster文件 重来一遍都更节省时间)
+	(Node 192.168.25.128:7002 is not empty. 
+	Either the node already knows other nodes (check with CLUSTER NODES) 
+	or contains some key in database 0. 
+	1.这个错误说明rm -f nodes.conf(这步还未证明必须,先执行第二步,试试执行之前语句么)
+	rm -f dump.rdb 需要再执行一次,
+	在对应端口那执行cd /admin/mw-cluster/redis02)
+	
+	2.还需要清空数据库:
+	/admin/mw-cluster/redis02/redis-cli -h 192.168.25.128 -p 7002
+	flushdb
+	/admin/mw-cluster/redis03/redis-cli -h 192.168.25.128 -p 7003
+	flushdb
+	/admin/mw-cluster/redis04/redis-cli -h 192.168.25.128 -p 7004
+	flushdb
+	/admin/mw-cluster/redis05/redis-cli -h 192.168.25.128 -p 7005
+	flushdb
+	/admin/mw-cluster/redis06/redis-cli -h 192.168.25.128 -p 7006
+
+	
+	/usr/lib64/ruby/gems/1.8/gems/redis-3.0.7/lib/redis/client.rb:97:ERR Slot 4648 is already busy 
+	遇到这个错误,删了redis-cluster文件 再来一遍会更快吧(经验:第二遍重新开始也用不了多久)
+	
+	显示下列信息即搭建成功:
+	[OK] All nodes agree about slots configuration.
+	>>> Check for open slots...
+	>>> Check slots coverage...
+	[OK] All 16384 slots covered.
+	
+	
+	
+连接服务:(后缀必须带上-c,不然无法识别为集群连接)
+	/admin/mw-cluster/redis01/redis-cli -h 192.168.25.128 -p 7001 -c
+	/admin/mw-cluster/redis02/redis-cli -h 192.168.25.128 -p 7002 -c
+	/admin/mw-cluster/redis03/redis-cli -h 192.168.25.128 -p 7003 -c
+	/admin/mw-cluster/redis04/redis-cli -h 192.168.25.128 -p 7004 -c
+	/admin/mw-cluster/redis05/redis-cli -h 192.168.25.128 -p 7005 -c
+	/admin/mw-cluster/redis06/redis-cli -h 192.168.25.128 -p 7006 -c
+
+例:
+	/admin/mw-cluster/redis04/redis-cli -h 192.168.25.128 -p 7004 -c
+	set a 123	
+	会算出来槽为15495,直接跳转到7003端口,并存储起来
+	
+	
+	
+	
+	
+	
+	
+Redis服务常用命令
+		
+	启动redis服务
+		cd /admin/mw/bin
+		./redis-server redis.conf
+		
+	查看redis服务是否启动
+		ps aux|grep redis
+		
+	登录redis客户服务端	
+		/admin/mw/bin/redis-cli
+		
+	温柔关闭 kill
+		第一种方式:
+		  kill xxx  (kill -9 强制关闭,适合tomcat等难以关闭,容易出问题的程序)
+		第二种方式:
+		  /admin/mw/bin/redis-cli shutdown
+		
+	已经登录客户端,执行
+		shutdown    再    exit(或quit)    就能退出了
+		
+	本机使用客户端  远程连接服务
+		/admin/mw/bin/redis-cli -h 192.168.25.128 -p 6379
+		
+	远程请求 连接指定主机
+		redis-cli -h 192.168.25.128 -p 6379	
+		
+	测试是否连接成功
+		ping
+		回复为 pong 即成功
+	
+	
+
+
+
+	
+	
+
+查询需要数据问题:
+1.从文件获取数据,单个文件的全量IO(主要问题),寻址,带宽,
+2.从数据库获取数据,解决了文件获取数据的全量IO问题,使用和系统一致的4KB的datapage存储数据格子
+并对数据格子进行索引(原理:分而治之(schema固定数据格式,每行空列也占用数据空间,便于偏移量跳跃查询(行偏移)),
+索引路由(数据量比内容更小,遍历更快;B+树,树干在内存中,叶子在硬盘(降低IO次数,提高叶子节点查询数据)))
+索引大概多少合适?
+最好不超过6个,索引也是数据,索引越多占用越多空间
+随着数据库单表数据量越来越大,数据库操作会越来越慢?
+增删改一定会变慢,查(如果走的是索引,速度基本一致;在高并发情况下,复杂查询那么速度会受到影响)
+3.SAP HAHA 内存关系型数据库(sql),数据全存储在内存中(成本很高)
+4.折中方案(热点数据存储在内存中),设计为k-v模式(键值对查询速度快;另估计考虑到是部分数据,不适合做关联查询(约束表数据不全))
+
+
+磁盘
+1.寻址(找到文件所在的磁道,再找到对应扇区)  ->  ms级别
+2.带宽  ->  百兆
+
+内存
+1.寻址  ->  ns级别
+
+
+
+监控linux进程调用系统资源的信息
+yum -y install strace
+使用( -ff 表示每个线程形成一个文件; -o指定查看到的信息输出到哪个目录; ./resis-server即被监听的进程启动命令,这里是监听redis服务)
+strace -ff -o ~/stracedir/ooxx/ ./resis-server
+
+可以看到redis启动了四个线程,说明redis是单线程模型;主要意思是处理业务(一致性事务)的时候使用的是单线程,而处理一些辅助业务时,是使用了其他线程来加快速度的
+
+
+
+cat /proc/进程id/fd 查看进程的属性(linux 一切皆文件)
+0,1,2 标准输入,标准输出,错误输出
+3,4 pipe 管道
+6 eventpoll
+7,8 socket
+
+
+可以查看更加详细的linux系统介绍
+yum -y install man man-pages
+例:
+man 2 read
+man 2 write
+man 2 bind
+man 2 socket
+man 2 select
+man 2 fcntl
+man 2 epoll
+man 2 epoll_create
+man 2 epoll_ctl
+
+
+
+
+linux安装抓包程序
+yum install tcpdump -y
+
+抓包: -nn表示只抓取ip port, -i 指定抓eth0这块网卡, port 80 表示只抓取80端口
+tcpdump -nn -i eth0 port 80
+
+yum -y install nc
+
+创建服务端,启动8080监听
+nc -l 8080
+
+查看nc连接
+ps -ef|grep nc
+
+
+查看进程
+cd /proc/进程id/fd
+例:
+cd /proc/12223/fd
+
+当前shell的进程( echo $$ )
+cd /proc/$$/fd
+
+连接上服务端
+nc localhost 8080
+在这个阻塞界面输入 hello; 那么在服务端可以看到客户端的输入
+
+yum install -y strace
+
+查看linux进程的系统调用
+例: 查看nc服务的调用资源( -o 指定文件名前缀 )
+strace -ff -o out nc -l 8080
+执行完上面命令,就会在当前文件目录下生成一个日志文件: out.进程的pid 
+
+
+
+
+
+BIO -> NIO -> select -> poll -> epoll
+(fd中的: 0,1,2 标准输入,标准输出,错误输出; 其他数字则对应socket,pipe,anon_inode,文件路径 等等,不同应用对应启动的fd数量也不同,nginx可能几个到十几个,tomcat可能伴随上百个)
+BIO 同步阻塞IO,一个客户端连接会阻塞整个应用的IO(应用开辟一个socket,对应linux系统的一个fd文件,如fd3; 存在问题:阻塞 accept)
+NIO 非阻塞IO,每新增一个客户端则,应用会再开辟一个socket连接,及新增线程来维护一个新的socket,如fd4; 解决单个应用IO阻塞问题,利用了多线程;存在问题:在开辟socket较多时,应用需大量遍历各个线程是否有数据,遍历需调用内核read方法,存在大量用户态至内核(kernel)态的切换,较消耗内核资源)
+select 将fd对应的socket信息直接注册到内核(kernel)中,应用通过调用select方法注册socket,和获取有数据传输的socket,解决了大量的用户态->内核态的切换,存在问题,开辟socket较多时,依然存在大量遍历(可能一次遍历只有一个socket要传输,其他的都无数据))
+poll 和 select较为接近,无太大性能优化
+epoll 使用了类似总线的事件驱动(例:鼠标点击后,传递数据至总线,向总线发送中断命令,并通知执行当前操作),socket依然注册在内核,但内核不做轮询,而是由客户端通知内核,中断,需执行IO操作;内核再把一段时间片里的socket放到内核外面的fd区域;应用只需要监听这块fd区域即可知道哪个客户端需要read,应用再连接客户端进行read
+
+
+
+redis 线程模型
+旧版本: 单线程worker模型:worker包含了 io read, 计算, io write( 计算操作单线程(串行化)保证了原子性操作)
+新版本(6.x之后): worker依然是单线程模型,但是io read 和 io write操作分离出来了,分配到 IO Thread中
+
+串行化的 计算并不一定比 并行的操作慢;并行修改(计算)数据需要开启事务,对数据进行加锁,加锁操作也是消耗资源的
+
+
+场景: 
+缓存,
+统计bitmap(布隆过滤器),
+数值,
+秒杀(是否能ng直接读取redis对应item的数量,为0就拦截),
+限流(对ip访问一次就+1,达到一定次数限制访问),
+数据迁出,无状态(session),栈,队列
+聚合数据,详情页面
+抽奖,随机事件
+集合:推荐系统(两个用户,交集就是共同爱好,差集就是可能喜欢的内容(推荐内容))
+排行榜,动态翻页
+锁(不推荐,建议zk,etcd)
+
+
+redis数据类型
+通过help查看对应数据类型的操作command
+help @string
+可看到 string 可以存 字符串,数值(incr decr 单线程原子性;秒杀,限流场景),二进制(bitmap(布隆过滤器) 只存储二进制数组(byte),不对数据进行解析转换,所以是二进制安全的)
+
+set key1 a
+STRLEN key1 (integer) 1 表示是一个字节;
+append key1 中
+STRLEN key1 (integer) 3 表示是'中'这个汉字占了两个字节;也表示redis计算的是字节数不是字符数
+
+清理
+flushall
+keys *
+
+bitmap 使用
+setbit k1 1 1
+上述命令表示 0000 0000 从左向右数,相对第一位的偏移量为1的位置置为1,即: 0100 0000,在二进制ASCII码表中对应 @ (0100 0000(二进制) 64(十进制) 40(十六进制) @(符号))
+所以 get k1 会显示为: @
+
+setbit k1 7 1
+上述命令表示 0100 0000 从左向右数,相对第一位的偏移量为7的位置置为1(同时上面的值@也会保留),即: 0100 0001,在二进制ASCII码表中对应 @ (0100 0001(二进制) 65(十进制) 41(十六进制) A(符号))
+所以 get k1 会显示为: A; 这时 STRLEN k1 显示为 (integer) 1 表示占一个字节
+
+setbit k1 9 1
+这时超出一个字节,这时候会显示为 01000001 01000000 , get k1 显示为 "A@"(前8位为A(之前的字节),后8位为@(扩容的字节)) , STRLEN k1 显示为 (integer) 2, 表示已经占两字节扩容了
+
+
+setbit k1 9999 1
+strlen k1 显示为 1250 (大概1kb多点,偏移量/8 ≈ 字节数)
+
+bitcount k1 帮助计算二进制中有多少个1
+
+bitcount k1 0 1 查看第0号字节和第1号字节区间共有多少个1(A@这两个字节),显示为 3
+
+bitcount k1 0 -1 (redis的双向索引,0表示起始字节,-1表示结束字节)显示为 4,即1250字节中有4个1
+
+del k1
+setbit k1 1 1
+setbit k1 7 1
+setbit k2 1 1
+setbit k2 6 1
+按位与操作
+bitop and andkey k1 k2
+get andkey 显示为 @ , 即 0100 0001 和 0100 0010按位与(有0则0)得到 0100 0000
+
+bitop or orkey k1 k2
+get orkey 显示为 C , 即 0100 0001 和 0100 0010按位与(有1则1)得到 0100 0011
+
+使用场景: 
+统计用户,任意时间窗口内登陆几天
+第三天登录一次
+setbit user1 3 1
+第八天登录一次
+setbit user1 8 1
+一年的第364天登录一次
+setbit user1 364 1
+计算一年内登录几次
+bitcount user1 0 -1
+
+统计月活,记录每天,有多少不同用户登录过
+20200101的id=7的用户登录1次
+setbit 20200101 7 1
+20200101的id=3的用户登录1次
+setbit 20200101 3 1
+
+20200102的id=3的用户登录1次
+setbit 20200102 3 1
+
+月活跃用户: 
+bitop or monthactivity 20200101 20200102
+bitcount monthactivity 0 -1
+
+
+查看
+help @list
+
+插入
+redis 127.0.0.1:6379> lpush k1 a b c d e f
+(integer) 6
+
+查询
+redis 127.0.0.1:6379> lrange k1 0 -1
+1) "f"
+2) "e"
+3) "d"
+4) "c"
+5) "b"
+6) "a"
+
+模仿"栈",后进先出
+redis 127.0.0.1:6379> lpop k1
+"f"
+
+模仿"队列",先进先出
+redis 127.0.0.1:6379> rpop k1
+"a"
+
+模仿"数组"操作(上面两操作会删除对应元素,lindex不会)
+lindex k1 3
+
+
+del k1
+lpush k1 y x a b c d e 
+lrange k1 0 -1
+
+删除区间范围之外的数据
+redis 127.0.0.1:6379> ltrim k1 0 -1
+OK
+redis 127.0.0.1:6379> lrange k1 0 -1
+1) "e"
+2) "d"
+3) "c"
+4) "b"
+5) "a"
+6) "x"
+7) "y"
+
+删除下标 0-4 之外的数据 (场景: 评论太多,删除部分)
+redis 127.0.0.1:6379> ltrim k1 0 4
+OK
+redis 127.0.0.1:6379> lrange k1 0 -1
+1) "e"
+2) "d"
+3) "c"
+4) "b"
+5) "a"
+
+(如果需要对集合数据进行取交集,并集,求差等操作,最好将这部分操作在单独的redis中操作,因redis单线程worker,这类操作耗时,容易阻塞)
+查看hash用法(场景:较为适用于聚合数据,详情页面; 数据来自不同数据库,汇总在redis,前端再从redis中获取)
+help @hash
+
+如果只能用 string 存储单个客户信息
+redis 127.0.0.1:6379> set user::name zhangsan
+OK
+redis 127.0.0.1:6379> set user::age 18
+OK
+redis 127.0.0.1:6379> get user::name
+"zhangsan"
+redis 127.0.0.1:6379> keys *
+1) "user::age"
+2) "user::name"
+
+获取user这个key方式 keys user* 使用通配符*
+redis 127.0.0.1:6379> keys user*
+1) "user::age"
+2) "user::name"
+
+使用 hset 来存储单个客户信息,取对应的数据节省了IO传输数据
+hset user name zhangsan
+hset user age 18
+keys *
+hincrby user age 1
+hget user age 
+	
+
+redis 127.0.0.1:6379> hgetall user
+1) "name"
+2) "zhangsan"
+3) "age"
+4) "19"
+redis 127.0.0.1:6379> hvals user
+1) "zhangsan"
+2) "19"
+redis 127.0.0.1:6379> hkeys user
+1) "name"
+2) "age"	
+
+
+查看set用法(去重,无序)
+help @set
+
+del k1
+sadd k1 ooxx xxoo oxxo xoox ooxx 
+smembers k1 
+
+随机获取指定个数(场景: 抽奖,一次抽取一批,人数大于奖品数->正数;人数小于奖品数->负数; 验证码)
+(正数:返回不重复的数据;如果集合个数小于指定个数,随机返回指定个数,如果指定个数超过集合个数,则返回集合中所有数据)
+(负数:返回可重复的数据;随机返回可重复的指定个数数据)
+
+redis 127.0.0.1:6379> srandmember k1 2
+1) "xxoo"
+2) "xoox"
+redis 127.0.0.1:6379> srandmember k1 5
+1) "ooxx"
+2) "oxxo"
+3) "xxoo"
+4) "xoox"
+redis 127.0.0.1:6379>
+redis 127.0.0.1:6379> srandmember k1 -2
+1) "oxxo"
+2) "oxxo"
+redis 127.0.0.1:6379> srandmember k1 -5
+1) "oxxo"
+2) "oxxo"
+3) "ooxx"
+4) "ooxx"
+5) "oxxo"
+
+随机抽取一个数据,并将数据从set中删除(场景: 抽奖,一次抽取一个幸运用户; 验证码)
+redis 127.0.0.1:6379> spop k1
+"ooxx"
+redis 127.0.0.1:6379> spop k1
+"xxoo"
+redis 127.0.0.1:6379> spop k1
+"xoox"
+redis 127.0.0.1:6379> spop k1
+"oxxo"
+redis 127.0.0.1:6379> spop k1
+(nil) 				表示用户都抽完了
+
+
+
+flushall
+sadd k1 a b c d e
+sadd k2 a b x y z
+取并集
+redis 127.0.0.1:6379> sunion k1 k2
+1) "e"
+2) "y"
+3) "x"
+4) "d"
+5) "c"
+6) "b"
+7) "a"
+8) "z"
+
+redis 127.0.0.1:6379> sinter k1 k2
+1) "a"
+2) "b"
+
+redis 127.0.0.1:6379> sdiff k1 k2
+1) "e"
+2) "d"
+3) "c"
+
+redis 127.0.0.1:6379> sdiff k2 k1
+1) "y"
+2) "x"
+3) "z"
+
+
+zset用法(根据分值进行排序(排序依据-> 元素 -> 分值(根据规则产生) -> 排名))
+场景: 排行榜;动态翻页
+底层数据结构:跳跃表(skiplist, 双向有序链表)来动态维护数据顺序
+插入-> 数据链表,在插入后会向上随机造层(链表上层元素为指针(不是元素的值)直接指向最下层数据的值;
+所有需要新插入的数据会在最上层比对元素数据和第一层指针指向底层元素的大小,只至找到比他大的一个,
+则会进入下一层,再找到比他小的那个元素的指针,则会进入到底层,在该元素后面断开链表指向自己,同时自己指向后面的元素
+之后,插入的这个元素会随机决定是否向上生成指针元素
+
+del k1
+zadd k1 5.6 apple 2.7 orange 7.4 banana
+
+redis 127.0.0.1:6379> zrange k1 0 -1 withscores
+1) "orange"
+2) "2.7000000000000002"
+3) "apple"
+4) "5.5999999999999996"
+5) "banana"
+6) "7.4000000000000004"
+
+
+取出从小到大的前两名(0 表示第一名; 1 表示第二名)
+redis 127.0.0.1:6379> zrange k1 0 1
+1) "orange"
+2) "apple"
+
+
+取出从大到小的前两名(0 表示第一名; 1 表示第二名)
+redis 127.0.0.1:6379> zrevrange k1 0 1
+1) "banana"
+2) "apple"
+
+
+获取元素的排名
+redis 127.0.0.1:6379> zrank k1 apple
+(integer) 1  		-> 	表示apple排名第一名
+
+
+
+redis 分布式
+为保障数据可靠性RDB AOF
+redis 内存 (持久化: 性能下降)
+RDB快照 -> 一般小时为单位,将内存数据快照到磁盘
+AOF日志 -> 每个操作,都追加记录,数据较为完整(性能下降)
+						 -> (默认级别)一般每秒向日志文件中追加redis一秒内的操作;os缓冲 刷写,一般1秒只会丢一个buffer
+						 -> os缓冲 刷写,每当一个buffer满了才进行追加,也是丢一个buffer,但可能存在丢几秒的数据(日志量少,多秒才能写满一个buffer)					 
+redis默认开启的是 rdb(恢复速度快,丢失数据多,磁盘IO少)
+				  aof(恢复速度慢,丢失数据少),低版本开启了aof则会关闭rdb
+				  混合使用: RDB每小时快照一次,AOF只记录快照之后的日志记录(恢复则先加载RDB中的数据,再加载AOF中的日志,这里的日志量就更小,非全量,速度相对就快了)
+				  
+混合使用: 需配置redis.config中的参数
+aof-use-rdb-preamble yes
+# 同时配置磁盘中存储RDB快照的路径,可自定义
+dir /var/lib/redis/6379
+
+在redis客户端输入 bgrewriteaof 可将日志数据刷入dump.rdb中
+bgrewriteaof
+
+
+redis 可用性 
+软件在生产系统存在的两个问题: 1.单点问题->主从主备集群   2.压力(处理能力上限)->分片集群,代理集群
+单点故障 -> 主从主备 -> 数据同步(1.同步写(redis也支持),强一致性C(破坏了可用性A); 2.异步写(redis默认),弱一致性) 
+
+微服务AKF拆分原则
+单个redis -> 1.冗余,保证数据可靠性 -> 2.业务逻辑拆分,订单redis,商品redis,用户redis -> 3.单个业务shardding(分片)集群,保证可用性
+
+
+redis 分片实现, 固定槽位16384个,虚拟出来的,后续数据key取hash再对16384取模
+再给物理节点按范围分布虚拟节点:如0-5462给第一台;5463-10923给第二台;10924-16383给第三台
+后续如果需要新增物理节点,则会将之前每台的虚拟节点分配部分给新的物理节点
+(使用虚拟槽,不使用物理节点数,避免增加节点导致数据都要重新hash取模再分布)
+一致性hash,key取hash模最大整数,虚拟节点为最大整数范围内的数字,会寻找距离该key的hash值最近的节点数值
+
+
+
+分布式锁(redis为 AP 模型,并不适合做锁,锁应该交给CP模型软件处理)
+redis宕机:redis默认每秒刷aof,可能丢失之前的锁,存在多把均可使用共享数据的锁,那么分布式锁就相当于失效了
+处理: 1.将redis持久化改为每操作级别的aof,那么性能急剧下降,不如使用mysql这种关系型数据库
+	  2.主从复制默认为弱一致,改为强一致保证数据可靠性,依然使得redis性能大幅下降
+
+客户端程序实现: redlock(先生成多把锁,例3把,客户端去抢过半锁即可操作共享数据; 如果没有过半(3个客户端各持有一把),则客户端释放自己抢到的锁,并开始下一轮争抢;)
+缺点:
+并行并发抢锁,较为耗时;
+另每次获取锁,锁有自己的有效期,单个客户端持有的多把锁各有效期不同,会以最短时间那把为准
+	
+	
+zk分布式锁
+也是生成多把锁,但是由master节点处理先到的客户端,为它在从节点上创建锁;后到客户端会被拒绝,不存在客户端并发抢锁问题
+同时,zk存在callback事件机制,未抢到锁的客户端可以watch锁节点,当该锁节点持有的客户端释放锁,zk会通知watch的客户端来抢
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

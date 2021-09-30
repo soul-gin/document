@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://impl.queryRiskAmlBorrInfo.risk.inquiry.ws.pccw.com/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns2="http://schemas.xmlsoap.org/soap/http" xmlns:ns1="http://queryRiskAmlBorrInfo.risk.inquiry.ws.pccw.com/" name="InquiryRiskAmlBorrInfoSrvWsImplService" targetNamespace="http://impl.queryRiskAmlBorrInfo.risk.inquiry.ws.pccw.com/">
+  <wsdl:import location="http://10.30.89.3:8081/ws_server//InquiryRiskAmlBorrInfoSrvWs?wsdl=InquiryRiskAmlBorrInfoSrvWs.wsdl" namespace="http://queryRiskAmlBorrInfo.risk.inquiry.ws.pccw.com/">
+    </wsdl:import>
+  <wsdl:binding name="InquiryRiskAmlBorrInfoSrvWsImplServiceSoapBinding" type="ns1:InquiryRiskAmlBorrInfoSrvWs">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="inquiryRiskAmlBorrInfo">
+      <soap:operation soapAction="inquiryRiskAmlBorrInfo" style="document"/>
+      <wsdl:input name="inquiryRiskAmlBorrInfo">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="inquiryRiskAmlBorrInfoResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="InquiryRiskAmlBorrInfoSrvWsImplService">
+    <wsdl:port binding="tns:InquiryRiskAmlBorrInfoSrvWsImplServiceSoapBinding" name="InquiryRiskAmlBorrInfoSrvWsImplPort">
+      <soap:address location="http://10.30.89.3:8081/ws_server//InquiryRiskAmlBorrInfoSrvWs"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

@@ -1,0 +1,13 @@
+-- 个人贷前模型评分细则
+delete from ns1.preloanmodel_score where pk='list_key'
+
+insert into ns1.preloanmodel_score(pk,list) values('list_key',List('[]'))
+
+OPERATE LIST_APPEND(list,MAP('{"target_name": "智信分", "weight":"30%","value_field":"S_GB_VB_R_MD_CREDIT_SCOREV3_V2","score_field":"F_GB_VB_S_MD_CREDIT_SCOREV3_V2"}')),LIST_APPEND(list,MAP('{"target_name": "经济稳定等级", "weight":"10%","value_field":"S_GB_VB_R_K_FINANCIAL_STABILITY_LEVEL_12","score_field":"F_GB_VB_S_K_FINANCIAL_STABILITY_LEVEL_12"}')),LIST_APPEND(list,MAP('{"target_name": "经济能力等级", "weight":"10%","value_field":"S_GB_VB_R_K_FINANCIAL_CAPACITY_LEVEL_MEAN_12PLUS","score_field":"F_GB_VB_S_K_FINANCIAL_CAPACITY_LEVEL_MEAN_12PLUS"}')),LIST_APPEND(list,MAP('{"target_name": "近12月余额均值", "weight":"10%","value_field":"S_GB_VB_R_K_ASSBALV4","score_field":"F_GB_VB_S_K_ASSBALV4"}')),LIST_APPEND(list,MAP('{"target_name": "近12月出账笔数均值", "weight":"10%","value_field":"S_GB_VB_R_K_ASSDEBV14","score_field":"F_GB_VB_S_K_ASSDEBV14"}')),LIST_APPEND(list,MAP('{"target_name": "近12月入账笔数均值", "weight":"10%","value_field":"S_GB_VB_R_K_ASSCREV14","score_field":"F_GB_VB_S_K_ASSCREV14"}')),LIST_APPEND(list,MAP('{"target_name": "外部借款申请通过率", "weight":"10%","value_field":"S_DC_VB_R_I_RATIO_FREQ_RISK_ACCEPT_ALL_ALL_365DAY","score_field":"F_DC_VB_S_I_RATIO_FREQ_RISK_ACCEPT_ALL_ALL_365DAY"}')),LIST_APPEND(list,MAP('{"target_name": "外部借款频率","weight":"10%","value_field":"S_DC_VB_R_M_LENGTH_LAST_LOAN_ALL_180DAY","score_field":"F_DC_VB_S_M_LENGTH_LAST_LOAN_ALL_180DAY"}')) on ns1.preloanmodel_score where pk='list_key'
+
+--企业评分细则
+delete from ns1.enterprise_score where pk='list_key'
+
+insert into ns1.enterprise_score(pk,list) values('list_key',List('[]'))
+
+OPERATE LIST_APPEND(list,MAP('{"target_name": "企业基础分", "weight":"24%","value_field":"","score_field":"F_NT_VB_BASICSCORE"}')),LIST_APPEND(list,MAP('{"target_name": "企业自身分", "weight":"36%","value_field":"","score_field":"F_NT_VB_BASICSELFSCORE"}')),LIST_APPEND(list,MAP('{"target_name": "企业控股关联分","weight":"10%","value_field":"","score_field":"F_NT_VB_BASICHESCORE"}')),LIST_APPEND(list,MAP('{"target_name": "企业投资关联分","weight":"20%","value_field":"","score_field":"F_NT_VB_BASICIESCORE"}')),LIST_APPEND(list,MAP('{"target_name": "企业法人投资分", "weight":"10%","value_field":"","score_field":"F_NT_VB_BASICOIESCORE"}')) on ns1.enterprise_score where pk='list_key'

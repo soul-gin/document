@@ -1,0 +1,121 @@
+
+
+
+# 先安装kong存储配置信息依赖的数据库
+# 此处我采用的9.6版本的postgres
+docker run -d --name kong-database \
+           --network=kong-net \
+           -p 5432:5432 \
+           -e "POSTGRES_USER=postgres" \
+           -e "POSTGRES_PASSWORD=postgres" \
+           -e "POSTGRES_DB=postgres" \
+           postgres:9.6
+
+
+#数据库安装后, 需进入postgres容器, 创建kong用户及数据库kong, 操作步骤如下:
+docker exec -it kong-database /bin/bash
+# 切换用户
+su postgres
+# 进入命令
+psql;
+# 创建用户kong及密码
+create user kong with password 'kong';
+# 创建数据库kong
+create database kong owner kong;
+
+
+# 数据库schema初始化
+docker run --rm \
+ --network=kong-net \
+ -e "KONG_DATABASE=postgres" \
+ -e "KONG_PG_HOST=127.0.0.1" \
+ -e "KONG_PG_PORT=5432" \
+ -e "KONG_PG_USER=kong" \
+ -e "KONG_PG_PASSWORD=kong" \
+ -e "KONG_PG_DATABASE=kong" \
+ kong:0.13.1 kong migrations up
+
+
+# 启动kong服务
+# KONG_PG_HOST推荐使用postgresql所在机器的ip(127.0.0.1),(不想配置ip则需修改关联机器的 /etc/hosts 配置)
+# 这里指定了空对外代理端口为 8000, 即可以通过 http://127.0.0.1:8000/* 进行代理
+# 这里指定了空对外控制台端口为 8001, 即可以通过 http://127.0.0.1:8001 测试空是否正常启动
+docker run -d --name kong \
+--network=kong-net \
+ -e "KONG_DATABASE=postgres" \
+-e "KONG_PG_HOST=127.0.0.1" \
+-e "KONG_PG_PASSWORD=kong" \
+-e "KONG_PROXY_ACCESS_LOG=/dev/stdout" \
+-e "KONG_ADMIN_ACCESS_LOG=/dev/stdout" \
+-e "KONG_PROXY_ERROR_LOG=/dev/stderr" \
+-e "KONG_ADMIN_ERROR_LOG=/dev/stderr" \
+-e "KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl" \
+-p 8000:8000 \
+-p 8443:8443 \
+-p 8001:8001 \
+-p 8444:8444 \
+kong:0.13.1
+
+
+
+
+
+
+# 安装konga控制台(可选), pantsel/konga
+# 先初始化konga自身表，注意先创建用户konga和数据库konga
+docker exec -it kong-database /bin/bash
+# 切换用户
+su postgres
+# 进入命令
+psql;
+# 创建用户kong及密码
+create user konga with password 'konga';
+# 创建数据库kong
+create database konga owner konga;
+
+
+# 初始化konga
+docker run --rm pantsel/konga:latest -c prepare -a postgres -u postgresql://konga:konga@127.0.0.1:5432/konga
+
+
+# 启动konga
+docker run -d \
+--name kong_dashboard_konga \
+-p 1337:1337 \
+-e "DB_ADAPTER=postgres" \
+-e "DB_HOST=127.0.0.1" \
+-e "DB_PORT=5432" \
+-e "DB_USER=konga" \
+-e "DB_PASSWORD=konga" \
+-e "DB_DATABASE=konga" \
+-e "NODE_ENV=production" \
+pantsel/konga:latest
+
+
+
+
+
+
+# 安装Kong Dashboard(可选),pgbi/kong-dashboard
+# docker stop kong_dashboard 会同时删除对应容器,下次启动需要使用 docker run 而不是 docker start
+# Start Kong Dashboard(use kong`s hostname or ip)
+docker run -d --name kong_dashboard \
+--rm -p 8080:8080 pgbi/kong-dashboard:latest start --kong-url http://127.0.0.1:8001
+
+
+
+# Start Kong Dashboard with basic auth(可选: 创建需要密码的控制台)
+docker run -d --name kong_dashboard \
+--rm -p 8080:8080 pgbi/kong-dashboard:latest start \
+--kong-url http://127.0.0.1:8001 \
+--basic-auth user1=password1 user2=password2
+
+
+
+# See full list of start options(可选: 查看可选参数列表)
+docker run --rm -p 8080:8080 pgbi/kong_dashboard:latest start --help
+
+
+
+
+

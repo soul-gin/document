@@ -1,0 +1,226 @@
+1.docker安装(ip addr 查看ip)
+	1.1: sudo yum remove docker docker-common docker-selinux docker-engin
+		 卸载旧版本
+		 
+	1.2: sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+		 安装
+		 
+	1.3: sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+		 设置docker仓库地址地址
+		 
+	1.4: sudo yum makecache fast
+		 更新yum包的索引
+		 
+	1.5: sudo yum install docker-ce
+		 安装最新版本的docker-ce
+		 
+	1.6: systemctl start docker
+		 启动docker
+	
+2.拉取需要的镜像(中途有选项就输入 y)
+
+	注意:如果需要使用oracle的jdk,需要自行定制tomcat镜像,跳至第五步
+	
+	2.1: docker pull hub.c.163.com/library/redis:3-alpine
+		 docker tag hub.c.163.com/library/redis:3-alpine redis:3 
+		 拉取指定版本的redis镜像,(可选:取别名)
+		 
+	2.2: docker pull hub.c.163.com/library/tomcat:7.0.79-jre7-alpine
+		 docker tag hub.c.163.com/library/tomcat:7.0.79-jre7-alpine tomcat:7	
+		 拉取指定版本的tomcat镜像,(可选:取别名)
+		 
+	2.3: docker pull hub.c.163.com/library/mysql:5.7.18
+		 docker tag hub.c.163.com/library/mysql:5.7.18  mysql:7 
+		 拉取指定版本的mysql镜像,(可选:取别名)
+		 
+	2.4: docker pull hub.c.163.com/library/alpine  	
+		 docker tag hub.c.163.com/library/alpine linux:latest
+		 拉取指定版本的linux精简版镜像(部分指令不支持,除非下载600多M的完整版),(可选:取别名)
+		 
+	2.5: docker rmi -f 'IMAGE ID'
+		 docker rmi $(docker images -q)
+		 删除不需要的镜像
+		 
+		 docker rm -f $(docker ps -qa)
+		 删除不需要的容器(如果有在运行的容器 需要先停止: docker stop 'IMAGE ID'
+		 
+3.通过镜像启动组件容器(-p 将linux中的端口映射到容器的端口  -d后台运行)
+	3.1: docker run -d --name redis -p 6379:6379 redis:3-alpine
+		 或 docker run -d --name redis -p 6379:6379 redis:3
+		 或 docker run -d --name redis -p 6379:6379 d37c3101a605
+		 使用全名(别名,IMAGE ID)启动redis镜像
+		 
+	3.2  docker run --name mysql -e MYSQL_ROOT_PASSWORD=root -d -p 3306:3306  hub.c.163.com/library/mysql:5.7.18 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+		 docker run --name mysql -e MYSQL_ROOT_PASSWORD=root -d -p 3306:3306 mysql:7 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+		 docker run --name mysql -e MYSQL_ROOT_PASSWORD=root -d -p 3306:3306 9e64176cd8a2 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+		 使用全名(别名,IMAGE ID)启动redis镜像(-e是环境配置) 
+		 
+	3.3 cd /		切换至根目录(为tomcat挂载共享数据准备)
+		mkdir /tempdata		创建目录
+		docker run -d --name tomcat -p 8080:8080 -v /tempdata:/tempdata --link redis:link-redis --link mysql:link-mysql hub.c.163.com/library/tomcat:7.0.79-jre7-alpine
+		(-v 容器挂载文件夹,将linux中文件夹挂载到运行容器的目录下(运行容器无该目录则会自动创建),
+		--link 容器间互连,将tomcat容器与redis和mysql容器互连)
+		 
+4.部署
+	4.1 修改war包中redis 和 mysql的链接配置,因配置了容器互连,将原本的ip替换成容器名称(reids和mysql两个名称即可)
+	
+	4.2 将修改好的war上传到linux的 /tempdata 文件夹中
+	
+	4.3 docker exec -it tomcat /bin/sh
+		进入指定容器内部
+		
+	4.4 cd /
+		ls
+		查看挂载文件夹中的war
+		
+	4.5 cp /tempdata/xxx.war /usr/local/tomcat/webapps
+		将xxx.war复制到webapps下面
+		
+	4.6 docker logs tomcat
+		查看部署日志,是否正常部署,是否有报错
+		
+	4.7 即可通过linux的ip加上8080加上项目名进行访问
+	
+	4.8 docker inspect tomcat
+		查看tomcat的详细信息
+		 
+		 
+5.定制oracle的tomcat镜像
+	5.1 去oracle下载 jdk-8u181-linux-x64.tar.gz 再去apache tomcat下载 apache-tomcat-7.0.92.tar.gz
+	
+	5.2 cd /
+		mkdir /dockerfile_soft
+	在centOS7中创建soft文件夹,以便存放压缩文件
+	
+	5.3 将两个.tar.gz的压缩包上传
+	
+	5.4 cd /dockerfile_soft
+		tar -zxf apache-tomcat-7.0.92.tar.gz
+		tar -zxf jdk-8u181-linux-x64.tar.gz 
+		将压缩包解压出来
+		
+	5.5 docker pull hub.c.163.com/public/centos:7.2-tools
+		拉取远程centos镜像,作为FROM(镜像底层 系统)
+	
+	5.6 vi /dockerfile_soft/Dockerfile
+	在/dockerfile_soft下面创建对应的Dockerfile文件,
+	内容如下:
+
+
+# #
+
+# 指定基础镜像(docker pull的地址)
+FROM hub.c.163.com/public/centos:7.2-tools
+
+# 声明Tomcat环境变量
+ENV CATALINA_HOME /usr/local/tomcat/
+# 声明JDK环境变量
+ENV JAVA_HOME usr/local/jdk/
+#设置环境变量生效(环境变量之间用冒号分割),声明了三个环境变量的路径
+ENV PATH $CATALINA_HOME/bin:$PATH:$JAVA_HOME/bin
+
+# 将tomcat复制到镜像里
+RUN mkdir -p "$CATALINA_HOME"
+ADD apache-tomcat-7.0.92 $CATALINA_HOME
+# 将JDK复制到镜像里
+RUN mkdir -p "$JAVA_HOME"
+ADD jdk1.8.0_181 $JAVA_HOME
+
+# 挂载数据卷( 需要挂载几个地址在镜像中 : "/镜像中的文件夹地址1", "/镜像中的文件夹地址2" )
+# 注: 通过 VOLUME 指令创建的挂载点，无法指定主机上对应的目录，是自动生成的
+VOLUME ["/tempdata", "/data"]
+
+#暴露端口
+EXPOSE 8080
+	
+# 设置容器启动时 启动tomcat
+CMD ["catalina.sh", "run"]
+
+# end
+
+	5.7 less Dockerfile
+		注意Dockerfiler是否信息是否完整,开头的FROM是否缺失
+	
+	5.8 docker build -t tomcat:7.0.92-jdk8 . 
+	执行Dockerfile,构建镜像,( . 表示使用当前目录中的Dockerfile, -t代表生成信息,冒号后面为tag标签信息)
+	
+	5.9 docker images
+		等待执行完毕,如果有报错看对应错误信息,查看构建好的镜像
+		
+	5.10 docker run -d --name tomcat -p 8080:8080 -v /tempdata:/tempdata -v /tempdata:/data --link mysql --link redis tomcat:7.0.92-jdk8
+		试运行,并级联到mysql redis(确保mysql redis装好了)
+	
+	5.11 docker inspect mytomcat
+		 查看Mounts信息(下的每条信息记录了容器上一个挂载点的信息，"Destination" 值是容器的挂载点，"Source"值是对应的主机目录)
+		 注意: 通过 VOLUME 指令创建的挂载点，无法指定主机上对应的目录，是自动生成的(即自己创建的镜像主机的Source是构建镜像时自动生成的)
+		"Mounts": [
+            {
+                "Type": "volume",
+                "Name": "255c6be2fc1bbb3bee7366207c3bf6ae8760a54f4040f081291d67052ecb0a46",
+                "Source": "/var/lib/docker/volumes/255c6be2fc1bbb3bee7366207c3bf6ae8760a54f4040f081291d67052ecb0a46/_data",
+                "Destination": "/data",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": ""
+            },
+            {
+                "Type": "volume",
+                "Name": "6ce72629d231f428b8072816a9794f90970356c517aaca04127a36877d2ff699",
+                "Source": "/var/lib/docker/volumes/6ce72629d231f428b8072816a9794f90970356c517aaca04127a36877d2ff699/_data",
+                "Destination": "/tempdata",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": ""
+            }
+        ]
+		
+	5.12 将war传到主机/tempdate对应的"Source"(上面配置了-v /tempdata:/tempdata,那么查看inspect时可见source已被修改为系统的tempdata)
+	"/var/lib/docker/volumes/6ce72629d231f428b8072816a9794f90970356c517aaca04127a36877d2ff699/_data"
+	
+	5.13 docker exec -it tomcat /bin/sh 
+		 进入镜像内
+		 
+	5.14 cp /tempdata/xxx.war /usr/local/tomcat/webapps 
+		 复制到webapps下面
+		 
+	
+	6.1 docker启动 (重启系统后,需要先启动docker,再启动容器,停止使用stop)
+		systemctl start docker
+		docker start redis
+		docker start mysql
+		docker start tomcat		
+	
+		 
+	7.1 docker pull hub.c.163.com/library/postgres:9.6.5
+		postgres数据库镜像
+		
+		docker run --name mypostgres_merry -d -p 5432:5432 -e POSTGRES_PASSWORD=root -e PGDATA=/data/ -e POSTGRES_USER=root -e POSTGRES_DB=my_db postgres:10
+
+		
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+	

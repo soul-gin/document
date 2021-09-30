@@ -1,0 +1,23 @@
+try{  
+   JavaMailSenderImpl senderImpl = new JavaMailSenderImpl();  
+     
+   Properties props = new Properties();  
+   props.put("mail.smtp.auth", "true");  
+   senderImpl.setHost("smtp.163.com");  
+   senderImpl.setUsername("zhangfl85");  
+   senderImpl.setPassword("851010");  
+   senderImpl.setJavaMailProperties(props);  
+   MimeMessage mimeMessge = senderImpl.createMimeMessage();  
+    
+   MimeMessageHelper mimeMessageHelper = new MimeMessageHelper(mimeMessge,true);  
+       
+   mimeMessageHelper.setTo("zhangfl85@126.com");  
+   mimeMessageHelper.setFrom("zhangfl85@163.com");  
+   mimeMessageHelper.setSubject("添加附件测试");  
+   mimeMessageHelper.setText("<html><head></head><body><h1>hello!!zhangfl</h1></body></html>",true);   
+   FileSystemResource img = new FileSystemResource(new File("I:/liang.jpg"));  
+   mimeMessageHelper.addAttachment("liang.jpg",img);        
+   senderImpl.send(mimeMessge);  
+  }catch(Exception e){  
+   e.printStackTrace();  
+ } 

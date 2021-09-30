@@ -1,0 +1,182 @@
+
+安装zookeeper(需先安装jdk,配置$JAVA_HOME)
+安装路径
+mkdir -p /home/admin/mw/
+
+查看是否在运行(装了java直接jps,看是否有QuorumPeerMain(zookeeper程序)或ZooKeeperMain(说明在使用客户端))
+ps -ef|grep zookeeper
+
+卸载
+无特殊操作,停了zookeeper,删了安装目录即可(find / -name zookeeper)
+
+安装操作(使用有sudo权限用户或直接 su root)
+groupadd admin;
+useradd -g admin admin;
+
+chmod +w /etc/sudoers
+vim /etc/sudoers
+在文件最后添加如下内容：
+# add privilege for admin
+
+admin ALL=(ALL) ALL
+
+# end
+su - admin
+tar -zxvf /home/admin/softwares/zookeeper-3.4.13.tar.gz -C /home/admin/mw 
+sudo chown -R admin:admin /home/admin/mw;
+# 软连接创建建议使用绝对路径,且最后一级目录一般不需要接 / 符号
+# 注意!!!不使用软连接,后续的zoo.cfg需要补全zookeeper目录路径为zookeeper-3.4.13
+ln -s /home/admin/mw/zookeeper-3.4.13 /home/admin/mw/zookeeper
+mkdir /home/admin/mw/zookeeper-3.4.13/{data,logs}
+ll /home/admin/mw/zookeeper-3.4.13
+
+
+单机配置
+注意: 第一个EOF周围添加'EOF'或者"EOF"防止变量被解析
+cat > /home/admin/mw/zookeeper/conf/zoo.cfg<<'EOF'
+# zk
+# common conf
+#
+
+tickTime=2000
+initLimit=10
+syncLimit=5
+clientPort=2181
+dataDir=/home/admin/mw/zookeeper/data
+# without soft link, you need to complete the file name, such as version number.
+#dataDir=/home/admin/mw/zookeeper-3.4.13/data
+dataLogDir=/home/admin/mw/zookeeper/logs
+# without soft link, you need to complete the file name, such as version number.
+#dataLogDir=/home/admin/mw/zookeeper-3.4.13/logs
+# 这里可以使用 hostname 替代 ip
+server.1=10.57.17.184:2888:3888
+
+# cluster config
+# Note: Each cluster configuration is the same
+
+#server.2=10.57.17.185:2888:3888
+#server.3=10.57.17.186:2888:3888 
+
+#
+# end
+#
+EOF
+
+
+查看配置结果
+cat /home/admin/mw/zookeeper/conf/zoo.cfg
+
+
+
+集群配置
+通过myid文件配置集群编号
+echo 1 > /home/admin/mw/zookeeper/data/myid  
+cat /home/admin/mw/zookeeper/data/myid
+ 
+显示为
+1
+备注：集群中第2台服务器中的该文件内容为2，其他依次编排数字3,4,5….
+echo 2 > /home/admin/mw/zookeeper/data/myid   第二台
+echo 3 > /home/admin/mw/zookeeper/data/myid   第三台
+
+配置zoo.cfg主配置文件
+# 备注：集群的每台配置相同
+注意: 第一个EOF周围添加'EOF'或者"EOF"防止变量被解析
+(使用cat直接覆盖需要注意对应版本,不同版本配置可能不同!!!)
+
+cat > /home/admin/mw/zookeeper/conf/zoo.cfg<<'EOF'
+# zk
+# common conf
+#
+
+tickTime=2000
+initLimit=10
+syncLimit=5
+# 对cline端提供服务,默认值:2181,也可自定义为:2182:(适用于当前机器已部署过zk)
+clientPort=2181
+dataDir=/home/admin/mw/zookeeper/data
+# without soft link, you need to complete the file name, such as version number.
+#dataDir=/home/admin/mw/zookeeper-3.4.13/data
+dataLogDir=/home/admin/mw/zookeeper/logs
+# without soft link, you need to complete the file name, such as version number.
+#dataLogDir=/home/admin/mw/zookeeper-3.4.13/logs
+# 3888:选举leader使用,2888:集群内机器通讯使用(Leader监听此端口)默认值:2888:3888
+# 也可自定义为:2882:3882(适用于当前机器已部署过zk)
+server.1=10.30.12.2:2888:3888
+
+# cluster config
+# Note: Each cluster configuration is the same
+
+server.2=10.30.12.3:2888:3888
+server.3=10.30.12.4:2888:3888 
+
+#
+# end
+#
+EOF
+
+
+查看配置结果
+cat /home/admin/mw/zookeeper/conf/zoo.cfg
+
+
+
+配置内存大小
+zookeeper/bin/zkEnv.sh该文件已经明确说明有独立JVM内存的设置文件
+# 查看匹配中行及后6行
+cat /home/admin/mw/zookeeper/bin/zkEnv.sh|grep '$ZOOCFGDIR/$ZOOCFG' -A 6
+
+描述如下:
+ZOOCFG="$ZOOCFGDIR/$ZOOCFG"
+if [ -f "$ZOOCFGDIR/java.env" ]
+then
+    . "$ZOOCFGDIR/java.env"
+Fi
+
+路径是zookeeper/conf/java.env
+安装的时候这个路径下没有有java.env文件，需要自己新建一个：
+注意!!! 这里的cat里面有$JVMFLAGS这种变量,需要在第一个EOF周围添加'EOF'或者"EOF"防止变量被解析
+cat > java.env<<'EOF'
+
+#!/bin/sh
+# export JAVA_HOME=/home/admin/mw/jdk1.8.0_191
+# heap size MUST be modified according to cluster environment
+export JVMFLAGS="-Xms256m -Xmx768m $JVMFLAGS"
+#
+# end
+#
+
+EOF
+
+
+启停服务
+cd /home/admin/mw/zookeeper/bin
+vi /home/admin/mw/zookeeper/bin/zkEnv.sh (如果有需要改日志路径可修改bin/zkEnv.sh的ZOO_LOG_DIR路径)
+./zkServer.sh start  (说明：启动服务)
+tail -f -n 500 zookeeper.out	(说明：启动后当前目录就会有zookeeper.out,查看运行情况)
+./zkServer.sh status	（说明：查看谁是leader，其余都是follower，单机时为standalone）
+./zkServer.sh stop   (说明：停止服务)
+
+登录验证
+cd /home/admin/mw/zookeeper/bin
+客户端登录
+./zkCli.sh
+查看节点
+登录后输入: ll /   并按TAB键,可以看到zookeeper
+rmr 或 delete 可以删除节点(如: rmr /dubbo)
+
+
+
+查看zk运行时使用内存大小
+jstat -heap 进程id
+
+
+
+
+
+
+
+
+
+
+

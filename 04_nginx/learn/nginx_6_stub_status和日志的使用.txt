@@ -1,0 +1,126 @@
+
+使用 stub_status 检查nginx状态
+需要在编译的时候加入--with-http_stub_status_module,后续才能使用
+./configure \
+--with-http_stub_status_module
+
+1.修改nginx.conf配置为
+
+worker_processes  1;
+# 错误日志
+error_log logs/error.log;
+events {
+    worker_connections  1024;
+}
+http {
+	# 日志格式 main就相当于一个变量
+	# remote_addr 客户端ip地址, remote_user 远程客户用户名称, 
+	# time_local 访问时间, request 请求方式(GET POST), status 状态码,
+	# body_bytes_sent 请求大小, http_referer 请求来源(防盗可用),从哪个地址跳转过来,
+	# http_user_agent 客户端信息(浏览器软件,设备类型), http_x_forwarded_for 反向代理时,记录客户端ip
+	# 如果访问量比较大,可以配置缓存buffer,定时刷新到磁盘(这样异常情况可能丢失,需要权衡配置)
+	# 另,需要根据时间来切割 access_log,可以使用sh脚本来切割(同时需要linux配置定时任务来每日凌晨对日志进行切割)
+	log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+	# 访问日志 使用 main 这个变量定义的格式,一般都放置在对应的server,不要放置在http节点(不利于管理)
+    # access_log  logs/access.log  main;
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+	# 注意include的路径是相对于conf文件夹的
+	include extra/*/*.conf;
+}
+
+
+2. 准备素材
+	mkdir /home/mw/nginx/conf/extra/status -p
+	
+	配置linux的hosts来模拟域名解析
+	vim /etc/hosts
+	192.168.25.161 www.nier.com bbs.nier.com status.nier.com nier.com
+	将 www.nier.com bbs.nier.com 映射成本机ip
+	
+	注意EOF后面不要加 ; 避免无法识别结束符
+cat >>/home/mw/nginx/conf/extra/status/status.conf<<EOF
+# status
+server {
+        listen       80;
+        server_name  status.nier.com;
+        location / {
+            stub_status on;
+			access_log off;
+        }
+}
+EOF
+
+# 注意,access_log logs/access_www.log main;需要针对server进行配置,不同的server的日志分开存放
+# 像上面的status.nier.com只是用于查看状态的无需记录日志,就可以配置off
+
+echo "
+server {
+        listen       80;
+        server_name  www.nier.com;
+        location / {
+            root   html/www;
+            index  index.html index.htm;
+			# 不同server应配置不同名称的日志
+			access_log logs/access_www.log main;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+}
+" > /home/mw/nginx/conf/extra/www/www.conf;
+
+
+
+	
+3.检查配置是否正确后重启(nginx访问量大,配置信息加载在内存中,不可能每次都要去读取磁盘)
+	重启前检查配置是否正确
+	/home/mw/nginx/sbin/nginx -t
+	显示如下表示正常
+nginx: the configuration file /home/mw/nginx-1.15.5/conf/nginx.conf syntax is ok
+nginx: configuration file /home/mw/nginx-1.15.5/conf/nginx.conf test is successful
+
+	重新加载
+	/home/mw/nginx/sbin/nginx -s reload
+	
+	查看nginx是否启动了这些端口(80端口)
+	netstat -lntup|grep nginx
+
+4.linux测试
+	curl status.nier.com 
+	
+	
+5.windows测试
+	win+r 输入 drivers,打开 etc 文件夹,找到 hosts
+	将 192.168.25.161 www.nier.com bbs.nier.com 复制到hosts中,保存
+	然后在浏览器中输入
+	status.nier.com 
+
+Active connections(正在处理的活动连接数): 1 
+server accepts handled requests
+ 37(nginx从启动开始一共处理了多少个连接) 37(nginx从启动开始共成功创建了多少次握手) 46(共处理了多少次请求)
+ 故可以计算:请求丢失数=握手数-连接数
+Reading(读取到客户端的Header信息数): 0 Writing(返回给客户端的Header信息数): 1 Waiting(已经处理完正在等待下一次请求的驻留连接): 0 	
+在开启 keep-alive 的情况下,这个值等于active connections - (reading + writing)
+
+	
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+
+

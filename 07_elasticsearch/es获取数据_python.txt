@@ -1,0 +1,92 @@
+import pandas as pd
+import json
+import requests
+import datetime
+path = '/Users/zhangchao/Desktop/analysis/jl/'
+
+begin = datetime.date(2019,6,14)
+end = datetime.date(2019,7,31)
+d = begin
+delta = datetime.timedelta(days=1)
+MODEL_LIST_1 = ['N_MODEL_VD_INDUSTRYTYPE6', 'N_MODEL_VD_COMPANYTYPE8', 'N_MODEL_VD_VTYPE8', 'N_MODEL_VD_PERIOD',
+                'N_MODEL_VD_COMPANYTYPE2', 'N_MODEL_VD_VTYPE7', 'N_MODEL_VD_INDUSTRYTYPE5', 'N_MODEL_VD_VTYPE5',
+                'N_MODEL_VD_VTYPE3', 'N_MODEL_VD_VTYPE1', 'N_MODEL_VD_INDUSTRYTYPE1', 'N_MODEL_VD_LOANAMOUNTCUT',
+                'N_MODEL_VD_VTYPE4', 'N_MODEL_VD_COMPANYTYPE3', 'N_NPB_VD_XLBKJYS', 'N_MODEL_VD_REGION2',
+                'N_MODEL_VD_MARRIED', 'N_MODEL_VD_BEREFT', 'N_MODEL_VD_INDUSTRYTYPE3', 'N_MODEL_VD_REGION3',
+                'N_MODEL_VD_UNMARRIED', 'N_MODEL_VD_INDUSTRYTYPE2', 'N_MODEL_VD_COMPANYTYPE1', 'N_MODEL_VD_AGECUT',
+                'N_MODEL_VD_COMPANYTYPE4', 'N_CBTD_VD_REGION5', 'N_MODEL_VD_VTYPE2', 'N_MODEL_VD_OTHER',
+                'N_MODEL_VD_REGION1', 'N_MODEL_VD_RATE', 'N_MODEL_VD_VTYPE6', 'N_MODEL_VD_DIVORCE',
+                'N_MODEL_VD_COMPANYTYPE7', 'N_MODEL_VD_INDUSTRYTYPE7', 'N_MODEL_VD_REGION4', 'N_MODEL_VD_INDUSTRYTYPE4']
+last_result = pd.DataFrame()
+while d <= end:
+    mydate = d.strftime("%Y%m%d")
+    d += delta
+    print(mydate)
+    response = requests.get(r'http://10.30.12.4:9200/atreus-' + mydate + '/entryinvokeresult/_search?size=2000')
+    txt = response.text
+    txt = json.loads(txt)
+    try:
+        all_list = txt['hits']['hits']
+        result = []
+        for a in all_list:
+            res = {'date': mydate}
+            try:
+                entry = json.loads(a['_source']['resultReqParams'])
+                for model_var in MODEL_LIST_1:
+                    res[model_var] = entry[model_var]
+                resultcome = json.loads(a['_source']['resultOutcome'])
+                workflow = a['_source']['workflowCode']
+                succ = a['_source']['resultSuccess']
+                entryid = a['_source']['entryId']
+                res['entryid'] = entryid
+                flow_type = entry['N_APPLY_VB_FLOWTYPE']
+                if (flow_type in ['4', '5']) and succ == True:
+                    id_number = entry['S_DC_VS_IDNO']
+                    mobile = entry['S_DC_VS_MOBILE']
+                    name = entry['S_DC_VS_NAME']
+                    res.update({'id_number': id_number, 'mobile': mobile, 'name': name})
+                    node_result = resultcome['nodeResult']
+                    for node in node_result:
+                        if node['displayName'] == '江铃联调测试':
+                            model_version = node['result']['modelVersion']
+                            model_res = node['result']['data']['是否不良']
+                            model_res_0 = node['result']['data']['probability(0)']
+                            model_res_1 = node['result']['data']['probability(1)']
+                            res.update({'model_version': model_version, '是否不良': model_res,
+                                        'probability(0)': model_res_0, 'probability(1)': model_res_1,
+                                        '模型调用是否成功': node['result']['message']})
+                        elif node['displayName'] == '同盾云端贷前反欺诈_借款人':
+                            try:
+                                res['N_MODEL_VP_RAWMODEL3'] = node['result']['data']['N_MODEL_VP_RAWMODEL3']
+                            except:
+                                res['N_MODEL_VP_RAWMODEL3'] = '0'
+                            try:
+                                res['N_MODEL_VP_RAWMODEL1'] = node['result']['data']['N_MODEL_VP_RAWMODEL1']
+                            except:
+                                res['N_MODEL_VP_RAWMODEL1'] = '0'
+                            try:
+                                res['N_MODEL_VP_RAWMODEL2'] = node['result']['data']['N_MODEL_VP_RAWMODEL2']
+                            except:
+                                res['N_MODEL_VP_RAWMODEL2'] = '0'
+                        elif node['displayName'] == '人行征信_个人_借款人':
+                            res['N_MODEL_VP_ADVNULL'] = node['result']['data']['N_MODEL_VP_ADVNULL']
+                            res['N_MODEL_VP_ADV1'] = node['result']['data']['N_MODEL_VP_ADV1']
+                            res['N_MODEL_VP_ADV2'] = node['result']['data']['N_MODEL_VP_ADV2']
+                            res['N_MODEL_VP_ADV0'] = node['result']['data']['N_MODEL_VP_ADV0']
+                            res['N_MODEL_VP_ADV3'] = node['result']['data']['N_MODEL_VP_ADV3']
+                            res['N_MODEL_VP_ADV6'] = node['result']['data']['N_MODEL_VP_ADV6']
+                        else:
+                            pass
+                    else:
+                        if res['模型调用是否成功'] == '模型计算成功':
+                            result.append(res)
+                else:
+                    pass
+            except Exception as e:
+                pass
+        result = pd.DataFrame(result)
+        last_result = pd.concat([last_result, result], axis=0)
+    except:
+        pass
+print(last_result)
+last_result.to_csv(path + 'jldata_4.csv', encoding='GBK', index=False)

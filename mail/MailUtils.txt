@@ -1,0 +1,254 @@
+package com.nier.utils;
+
+/**
+ * @author
+ * @Description
+ * @create 2018-06-12 10:49
+ **/
+
+import org.apache.commons.io.IOUtils;
+import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import sun.misc.BASE64Decoder;
+import sun.misc.BASE64Encoder;
+
+import javax.imageio.ImageIO;
+import javax.mail.MessagingException;
+import javax.mail.internet.MimeMessage;
+import java.awt.image.BufferedImage;
+import java.io.*;
+
+public class MailUtils {
+
+    private JavaMailSenderImpl mailSender=null;
+
+    //设置了"mail.smtp.auth" 情况下,才需要设置用户名和密码进行校验
+	//import java.util.Properties;
+	//Properties props = new Properties();  
+    //props.put("mail.smtp.auth","true");
+    //senderImpl.setUsername("yunuotianming");
+    //senderImpl.setPassword("z19921031x");
+    
+
+    //邮件用户名
+    private String userName="yunuotianming";
+    //发送邮箱名称
+    private String from="yunuotianming@163.com";
+    //接收邮箱名称
+    private String to="1533119789@qq.com";
+    //private String to="DUQIUSHI670@pingan.com.cn";
+
+	//设置发件服务器,用户名,密码,端口
+    public MailUtils()
+    {
+        this.mailSender = new JavaMailSenderImpl();
+        //邮箱smtp服务器
+        mailSender.setHost("smtp.163.com");
+        mailSender.setPort(25);
+        mailSender.setUsername(this.userName);
+        //邮箱密码
+        mailSender.setPassword("z19921031x");
+    }
+
+    //普通文本Email
+    public void sendPureMail() {
+        SimpleMailMessage message = new SimpleMailMessage();
+
+        String spitterName = "这里是标题（纯文本）";
+        message.setFrom(this.from);
+        message.setTo(this.to);
+        message.setSubject("这里是标题!");
+        message.setText("这里是内容");
+        this.mailSender.send(message);
+    }
+
+    //带多个附件的Email
+    public void sendMailWithAttachment() throws MessagingException {
+
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setFrom(this.from);
+        helper.setTo(this.to);
+        helper.setSubject("这里是标题(带多个附件）!");
+        helper.setText("这里是内容(带附件）");
+
+        //添加两个附件（附件位置位于java-->resources目录)，可根据需要添加或修改
+        ClassPathResource image = new ClassPathResource("/coupon.jpg");
+        ClassPathResource PDF = new ClassPathResource("/Rop Reference.pdf");
+        helper.addAttachment("Coupon.png", image);
+        helper.addAttachment("Rop Reference.pdf", PDF);
+
+        this.mailSender.send(message);
+    }
+
+    //带附件的HTML格式的Email
+    public void sendMailHtmlWithAttachment() throws MessagingException {
+
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true,"GBK"); //解决乱码问题
+
+        helper.setFrom(this.from);
+        helper.setTo(this.to);
+        helper.setSubject("这里是标题(Html带附件）!");
+        //设置META解决乱码问题
+        helper.setText("<html><META http-equiv=Content-Type content='text/html; charset=GBK'><body><img src='cid:Coupon'>" +
+                "<h4>" + "测试乱码" + " says...</h4>" +
+                "<i>" + "测试乱码2" + "</i>" +
+                "<a href='http://www.baidu.com' > <img src='cid:img'/> </a> </body></html>", true);
+
+        //图片嵌入到html文件中
+        ClassPathResource couponImage = new ClassPathResource("/1.jpg");
+        System.out.println(couponImage.toString());
+        //如果使用的不是网路图片,那么需要使用该方法添加传入的图片
+        helper.addInline("Coupon", couponImage);
+
+        String test = "/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
+                "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIy" +
+                "MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCADcAKYDASIA" +
+                "AhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQA" +
+                "AAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3" +
+                "ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWm" +
+                "p6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEA" +
+                "AwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSEx" +
+                "BhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElK" +
+                "U1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3" +
+                "uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD36oZp" +
+                "Y7aF5ppFSNFLMzdFWmXV3b2NrJdXc8cFvGu55JG2qq/71eT+OviDa+ItDl8PeGIL69n1SUWUd2kW" +
+                "yBufnVZG6tt3UAW7bSm+IljPr/iO+vLbw425rHT4ZvKQwr/y2mb7zFvvf7NeUa74atYdDXxFa2ln" +
+                "bW99If7M02SWeS5li3f6xv3n90M1eg+J4/GtzZ6P4anm0zSLTVZlsI9PsFaaVbdV/eMzt/Cqr/DV" +
+                "zX/Dnh/wppL6FoMX23xRqsX2C3e5l82cRsu1mZv+Wcax5+7toA5XSPgxe6zotjqcFzpCw3dvHPGr" +
+                "Lc7lVl3f89Kuf8KD1T/n80X/AL5uv/jle4aXYR6ZpVnp8X+rtbeOFf8AdVdtXqAPAf8AhQeqf8/m" +
+                "i/8AfN1/8co/4UHqn/P5ov8A3zdf/HK9+ooA8B/4UHqn/P5ov/fN1/8AHKP+FB6p/wA/mi/983X/" +
+                "AMcr36igDwH/AIUHqn/P5ov/AHzdf/HKP+FB6p/z+aL/AN83X/xyvfqKAPAf+FB6p/z+aL/3zdf/" +
+                "AByj/hQeqf8AP5ov/fN1/wDHK9+ooA8B/wCFB6p/z+aL/wB83X/xyj/hQeqf8/mi/wDfN1/8cr36" +
+                "igD5k8X/AAuufB+gNqlzJpdx+8WGOGFbndIzN93/AFlWtF8DaNA+h32sLaXmja0VggubKeeM20zL" +
+                "ujWQMzfe5X/ZavY/iDpV3q3g68XT1El/asl3bDrukiZW2/8AAtrLXIXPgbw7468MTav4VvbjTJb1" +
+                "fNkt7WbELTr822SP+Flb+7toA07VLz4fa/p2mzahdXvhvU5Ps1u122+Syn/hTd/Ejfdr0ivD5tU8" +
+                "b+MPhrIl1otpq0dzG22aym8m5tp42/ijb7zKy/w12XhL4paB4gsbGGe9W01OWFd0VyvleZJ0by2b" +
+                "5W+bdQB6BRTaKAPMbm3sPFni7XL3xLcKNC8PSxwQ2c8m2AybdzTSZ+997atY1z4pbxJ8QrG58I6Q" +
+                "2tWOiWjxwtG4ggjuJPlyzN/Csa/w1x3irWrXSPiNqj6pYtqVlHqVxN9iZv3TTeTCsbSf7K7q7Pwd" +
+                "4nFl4fe28P2M+u+IdQla5uZoYGitI5W/vO235FG1fl/u0AN03RPEHjvxtqM+u6x9iTRFFkp0Zmjy" +
+                "zjdIiyNz8vyqxr0nw94O0Pwysj6Zp8cU0n+suHZnlf8A3nb5qb4O8PN4a8Px2c8wuL2SSS4u7j/n" +
+                "rNI25m/z6V0VABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABXG6p8O9HvtQfU7CS80jVJOWvNNm8pp" +
+                "P95fut/3zXZUUAeKaNN4v8DeMdT8P21vB4iS4X+1RuZbaWTc22Rk/h3bvvLR4T1Hw9eTa34S8T2S" +
+                "2UMl81zp9jq8flsI5fmKr6bW3bdrfxV3HjLQtSuJ9M1/QkifV9JkZo4XO1bmJhteLd/CfSvOPHni" +
+                "fw/f3dhrGo6TNDqVqrQXekaraNH9pgb7yrJt27lb5lbdQB3PhRbrw94yvfBsl9cXVj9iXUdPeVt0" +
+                "sMe/y2iLd1U4x7UVwnwfvjqfj1vLkuFtotLuo7VJ23SRQi5jKxsf9nNFAFrQP+ThL7/r4vf/AETD" +
+                "XuFeH6B/ycJff9fF7/6Jhr3KgAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAG0Mqt975" +
+                "qdRQB4h8NP8Aksuu/wDXPUf/AEtWij4af8ll13/rnqP/AKWrRQAzQP8Ak4S+/wCvi9/9Ew17lXhu" +
+                "gf8AJwl9/wBfF7/6Jhr3KgAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigDxD4af" +
+                "8ll13/rnqP8A6WrRR8NP+Sy67/1z1H/0tWigBmgf8nCX3/Xxe/8AomGvcq8N0D/k4S+/6+L3/wBE" +
+                "w17lQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQB4h8NP+Sy67/wBc9R/9LVoo" +
+                "+Gn/ACWXXf8ArnqP/patFADNA/5OEvv+vi9/9Ew17lXhugf8nCX3/Xxe/wDomGvcqACiiigAoooo" +
+                "AKKKKACiiigAooooAKKKKACiiigAooooAKKKKAPEPhp/yWXXf+ueo/8ApatFHw0/5LLrv/XPUf8A" +
+                "0tWigBmgf8nCX3/Xxe/+iYa9yrw3QP8Ak4S+/wCvi9/9Ew17lQAUUUUAFFFFABRRRQAUUUUAFFFF" +
+                "ABRRRQAUUUUAFFFFABRRRQB4h8NP+Sy67/1z1H/0tWij4af8ll13/rnqP/patFADNA/5OEvv+vi9" +
+                "/wDRMNe5V4boH/Jwl9/18Xv/AKJhr3KgAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAC" +
+                "iiigDxD4af8AJZdd/wCueo/+lq0UfDT/AJLLrv8A1z1H/wBLVooAZoH/ACcJff8AXxe/+iYa9yrw" +
+                "3QP+ThL7/r4vf/RMNe5UAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAeIfDT/k" +
+                "suu/9c9R/wDS1aKPhp/yWXXf+ueo/wDpatFADNA/5OEvv+vi9/8ARMNe5V4boH/Jwl9/18Xv/omG" +
+                "vcqACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAPEPhp/yWXXf+ueo/+lq0UfDT" +
+                "/ksuu/8AXPUf/S1aKAGaB/ycJff9fF7/AOiYa9yrw3QP+ThL7/r4vf8A0TDXuVABRRRQAUUUUAFF" +
+                "FFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFAHiHw0/wCSy67/ANc9R/8AS1aKPhp/yWXXf+ueo/8A" +
+                "patFADNA/wCThL7/AK+L3/0TDXuVfNura3qHh74t6tqWmae2oXEd1d/uhu+VfJh3M235tq16TafE" +
+                "fVrXS7fVNZ8O7tGlj3/2npdx9pjQf3mj2qyrQB6TRVa0u7e9tIbq1lWaCVQ8ckbZVlbvVmgAoooo" +
+                "AKKKKACiiigAooooAKKKKACiiigAooooAKKyNe13T/DelS6jqU3lQJ8vyjczt/Cqr/E1cHrfxH8T" +
+                "6dp6agvhOOytZpFjtlv7r/Sblm+6qwxqzbqAMP4af8ll13/rnqP/AKWrRVX4QXE938T9Subq3a2u" +
+                "JrW+klgP/LJ2u4yU/DpRQBs2Phj+2fG/iqSz1ObS9fsNRWe1uI13fJLCv3kb7yNtqn4c1zV/AGr6" +
+                "l4X1vRpNQt5d2oodKj8wQwu21v3J+by938P8O6vQfEfg6LWb2LVbG+n0nXII9kN7AM5X+5Iv3ZF/" +
+                "2a4HxHqXi7wz4k0PxBrukwXFvYSSW899pkmPtEU3yqrQt8wbdtb+7uoA2PhN4i0qZtY8O2N8sltZ" +
+                "XbSaerbo28iT5vL2t837tty16fXhfinU/BXibxt4fvbjazSytp9/azpJbzxbuYpP4W+Vv4v9quqv" +
+                "01j4cRpqcWrXmq+Go5VW8tb5vMmto2bHmRyfeZV/utQB6ZRTFZZFVlbcrcqwp9ABRRRQAUUUUAFF" +
+                "FFABRRRQAUUUUAFNqhrOq22haPd6pdki2tYmlkxXCJpWveJNKk1jxTrl1o+kmFrj+y9Nbymjh27v" +
+                "3033mbb95aAKXi7xTokfxQ0+31a9jS00O3+1eSAztLdyfLGqov3mVfm/4FWY2peIviF47S/0KzGn" +
+                "2ejI1us2rRHdDLJ96RYu7bdu0NVbwB4j8E+C/DcmqXklsuqX8kt2ltCvnzww/wAEbN8zL8q7vmb+" +
+                "KtDwOfHV14d26ZpdvpbalcSX91qt+3mF2kbdujhX/Z2/eoAveEfD0fh74ty2kN3LfTDRJJr25lwC" +
+                "88tyrE4H3c7ScUV2fhbwpB4bhuWFzPd6heP5t3fTndJM3p/sqOy0UAdJWH4o0KPxN4Y1DR5mx9ph" +
+                "ZVYn/VyfeVv+AttrcooA81tba1+JfgC507U7eJNdtY2tLrzI1L290v8AF/usw3V5zNqiaJ4AmS21" +
+                "kK5hksNV8N390rNG3+rZ4N3zL83zbfmXmvYdc8C6ZrGoNqsdzqGl6lny3u9MuDBJIvo3BB/KsG6+" +
+                "DelXt75l14g8Q3Erj5pZbiJ2P4mKgDU8LeM/Ddr4S0W3v/EujR3cVjDHMrX0fDrGu7+Ktf8A4Tzw" +
+                "h/0NWi/+B0f/AMVXJf8ACi/D/wD0Gdc/77t//jNH/Ci/D/8A0Gdc/wC+7f8A+M0Adb/wnnhD/oat" +
+                "F/8AA6P/AOKo/wCE88If9DVov/gdH/8AFVyX/Ci/D/8A0Gdc/wC+7f8A+M0f8KL8P/8AQZ1z/vu3" +
+                "/wDjNAHW/wDCeeEP+hq0X/wOj/8AiqP+E88If9DVov8A4HR//FVyX/Ci/D//AEGdc/77t/8A4zR/" +
+                "wovw/wD9BnXP++7f/wCM0Adb/wAJ54Q/6GrRf/A6P/4qj/hPPCH/AENWi/8AgdH/APFVyX/Ci/D/" +
+                "AP0Gdc/77t//AIzR/wAKL8P/APQZ1z/vu3/+M0Adb/wnnhD/AKGrRf8AwOj/APiqP+E88If9DVov" +
+                "/gdH/wDFVyX/AAovw/8A9BnXP++7f/4zR/wovw//ANBnXP8Avu3/APjNAHW/8J54Q/6GrRf/AAOj" +
+                "/wDiqP8AhPPCH/Q1aL/4HR//ABVcl/wovw//ANBnXP8Avu3/APjNH/Ci/D//AEGdc/77t/8A4zQB" +
+                "U+KvjHw7d+C/Ls9Y03UFN5btcW1veRs8kSyKzfLu/wBla5nUBe+P30nT7jxR9rvdVmWWbTNMmX7N" +
+                "p9sPmfzNv3pP4fm/iauy/wCFGaB/0Gdb/wC+7f8A+M1PYfCLT9PHmWPiXxLaNIMMbe7jjz+UdAFb" +
+                "xXpmmRrY+A/DtnBZz6qym9+yIqtDZq26Rmb/AGsbfm+9XpcUccMKxxqqxou1VXstYfh3wfpXhjzp" +
+                "7MXE95dEG4vLuYzTS/7zGuhoAKKKKAP/2Q==";
+
+        try {
+            byte[] bytes = decoder.decodeBuffer(test);
+            System.out.println(bytes.length);
+            //ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes);
+            //helper.addInline("img",new ByteArrayResource(IOUtils.toByteArray(byteArrayInputStream)),"application/x-jpg");
+            helper.addInline("img",new ByteArrayResource(bytes),"application/x-jpg");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        //图片作为附件发送
+        ClassPathResource couponImage2 = new ClassPathResource("/1.jpg");
+        helper.addAttachment("Coupon.png", couponImage2);
+
+
+        this.mailSender.send(message);
+    }
+
+    public static void main(String[] args) throws MessagingException{
+        System.out.println("开始发送邮件");
+        MailUtils mailUtils = new MailUtils();
+        mailUtils.sendMailHtmlWithAttachment();
+
+        System.out.println("邮件发送成功");
+    }
+    static BASE64Encoder encoder = new sun.misc.BASE64Encoder();
+    static BASE64Decoder decoder = new sun.misc.BASE64Decoder();
+
+    static String getImageBinary(){
+        String imgStr = "";
+        File f = new File("R:/Java/code/idea_workspace/springboot_nier01/target/classes/2.jpg");
+        BufferedImage bi;
+        try {
+            bi = ImageIO.read(f);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(bi, "jpg", baos);
+            byte[] bytes = baos.toByteArray();
+
+            imgStr = encoder.encodeBuffer(bytes).trim();
+            return imgStr;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    static void base64StringToImage(String base64String){
+        try {
+            byte[] bytes1 = decoder.decodeBuffer(base64String);
+
+            ByteArrayInputStream bais = new ByteArrayInputStream(bytes1);
+            BufferedImage bi1 = ImageIO.read(bais);
+            File w2 = new File("f://456.jpg");//可以是jpg,png,gif格式
+            ImageIO.write(bi1, "jpg", w2);//不管输出什么格式图片，此处不需改动
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void testImgToString() {
+        String ss = getImageBinary();
+//      base64StringToImage(ss);
+        System.out.println(ss);
+    }
+
+}

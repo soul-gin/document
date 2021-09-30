@@ -1,0 +1,1508 @@
+1.网络配置
+vi /etc/sysconfig/network-scripts/ifcfg-eth0
+
+#物理设备名 eth0表示第一块网卡
+DEVICE=eth0
+#HWADDR  网卡的MAC地址,唯一标识,虚拟机情况下注释掉
+#Ethernet 表示是以太网
+TYPE=Ethernet
+#UUID 设备的唯一标识,虚拟机情况下注释掉
+#控制网卡是不是开机启动
+ONBOOT=yes
+#网络管理的控制
+NM_CONTROLLED=yes
+#none 引导时不使用协议 static 静态分配地址 dhcp 动态分配地址 bootp 使用BOOTP协议
+BOOTPROTO=static
+USERCTL=no
+PEERDNS=yes
+IPV6INIT=no
+#IP V4地址
+IPADDR=192.168.25.161
+#子网掩码 划分网络位 和 主机位
+NETMASK=255.255.255.0
+#网关 路由器的地址
+GATEWAY=192.168.25.2
+#DNS 域名解析为IP的服务
+DNS1=8.8.8.8
+DNS2=10.0.0.254
+
+
+修改完成后,使配置文件生效
+/etc/init.d/network restart
+或
+ifdown eth0 && ifup eth0
+
+
+# 如果出现克隆虚拟机网卡信息修改无效\
+可将 vi /etc/sysconfig/network-scripts/ifcfg-eth0 配置好
+清空 > /etc/udev/rules.d/70-persistent-net.rules 网络配置信息
+再关闭虚拟机,在"设置"->"硬件"->删除"网络适配器"
+再点击"添加"->"网络适配器"->"MAC地址" 
+再点击"网络适配器"->"高级"->"生成"按钮,生成新的MAC地址,点击确定
+再开机即可
+
+(后续可修改主机名: vi /etc/sysconfig/network; 修改域名解析: vi /etc/hosts;
+
+
+当前网关查看命令
+route -n
+
+
+2.查看dns服务配置
+(优先使用ifcfg-eth0配置,如果重启ifcfg-eth0会覆盖resolv.conf的配置)
+cat /etc/resolv.conf
+
+3.hosts(windows 在运行中输入 drives 然后找到etc下的HOSTS 或 C:\Windows\System32\drivers\etc)
+cat /etc/hosts
+
+4.修改主机名(也可以配置网关,但是一般不在这里配置)
+cat /etc/sysconfig/network
+不重启的情况下,下列两种修改都要执行
+永久修改
+sed 's#CentOS61#CentOS61#g' /etc/sysconfig/network
+sed -i 's#CentOS61#CentOS61#g' /etc/sysconfig/network
+临时修改
+hostname CentOS61
+
+克隆的虚拟机,网络配置问题
+1.需删除"HWADDR","UUID", 注意设置(BOOTPROTO=static 和 ONBOOT=yes)
+vi /etc/sysconfig/network-scripts/ifcfg-ens33
+删除( 按两次d ) "HWADDR"  "UUID"
+修改IP即可  [网关(如:10.0.0.2) DNS(8.8.8.8 或增加网关值 DNS2=10.0.0.2)]
+
+2.清空70-persistent-net.rules文件, 不存在则不用操作
+cd /etc/udev/rules.d/ && ll;
+ > /etc/udev/rules.d/70-persistent-net.rules
+
+3.可选操作, 主机名修改(永久+临时) 
+hostnamectl set-hostname p8-etcd-node02-slave01 && hostname p8-etcd-node02-slave01;
+
+4.重启
+systemctl restart network
+或
+ifdown ens33 && ifup ens33
+或
+reboot
+
+
+5.实现开机要挂载的文件系统的一个文件(该文件配置错会无法启动; blkid 可以看到挂载信息)
+cat /etc/fstab
+有6列属性
+要挂载的设备	挂载点	文件系统类型	挂载选项	是否备份	是否开机做磁盘检查(非系统磁盘最好都是0)
+
+6.开机自启动的命令( chkconfig 常用来管理 yum install 安装的程序服务开机自启动)
+cat /etc/rc.local
+即可以作为开机启动哪些服务(mysql tomcat)
+也可以执行一些想执行的命令(touch /var/lock/subsys/local)
+
+7.开机启动流程
+cat /etc/inittab
+
+8.存放系统或服务器以 System V 模式启动的脚本(一般yum install安装的默认启动程序目录)
+ls -l /etc/  可以发现init.d是rc.d/init.d软连接(windows下的快捷方式)过来的目录
+ls -l /etc/rc.d/init.d
+
+9.全局环境变量
+cat /etc/profile
+
+9.加载系统登录程序的一个目录(跳板机使用的脚本)
+cat /etc/profile.d
+
+10.登录提示
+cat /etc/issue
+echo "make sure you have right to login this machine" > /etc/issue
+
+11.登录后的提示
+cat /etc/motd
+echo "welcome to naruto world" > /etc/motd
+
+12.内核源码存放目录
+/usr/src
+
+13.日志目录
+/var 						日志文件
+/var/log					各种系统日志存放地
+ls /var/log/messages*		系统信息默认日志文件,非常重要,按照周自动轮询
+cat /var/log/secure			系统安全日志,登录信息记录(如果发现大量的failed,可以关注下是否被攻击)
+cat /var/spool/clientmqueue			系统定时任务
+
+在rsyglog服务开启的情况下
+dmesg						查看系统故障信息的命令
+
+13.系统信息
+/proc
+/proc/version
+/proc/sys/kernel
+/proc/sys/net/ipv4
+
+
+14.linux的启动过程
+1.开机自检(BIOS)  						检查硬件是否正常
+2.MBR引导								硬盘0柱面0磁道1扇区的前446byte(后面还有64byte是四个分区 2byte的Magic Number)
+3.GRUB引导菜单(是否多系统等操作)		cat /etc/grub.conf
+4.加载内核(kernel)
+5.启动init进程(第一个启动的程序)		可以通过 ps -ef|grep init 查看,
+										发现(root 1  0  0 12:03 ? 00:00:01 /sbin/init 	进程号为1)	
+6.读取 inittab 文件,执行 rc.sysinit,rc等脚本( chkconfig --list sshd 查看启动运行级别)
+		/etc/inittab
+		/etc/rc.d/rc.sysinit
+		/etc/tc.d/rc3.d/				<==文本模式
+7.启动 mingetty,进入系统界面
+
+重要的开机自启动服务
+sshd 		远程连接Linux服务时需要用到这个服务程序
+rsyslog		日志相关软件
+network		系统启动时,若想激活/关闭各个网络接口
+crond		定时任务
+sysstat		监测系统性能及效率的一组工具
+	iostat		提供CPU使用率及硬盘吞吐效率
+	mpstat		单个或多个处理器相关的数据
+	sar			收集,报告并存储系统活跃的信息
+	
+查看
+系统语言是en情况下
+chkconfig --list|grep "3:on"
+系统语言是zh_CN情况下
+chkconfig --list|grep "3:启用"
+
+优化,将非重要的开机自启动服务,都关闭
+egrep		grep的扩展命令( egrep "需要过滤的字符串1|需要过滤的字符串2|需要过滤的字符串3" )
+				-v		排除
+
+只开启这5个重要自启动服务的两种思路:1.关闭这5个之外的 2.关闭所有,再开启这5个
+1.先查看chkconfig --list
+	过滤出开启的运行级别为3的服务
+	再反向过滤出非重要服务的开启状态的服务
+	通过awk将需要执行的命令直接拼接出来($1 取出第一列数据)
+	交给系统执行命令 |bash
+chkconfig --list|grep "3:on"|egrep -v "sshd|rsyslog|network|crond|sysstat"|awk '{print "chkconfig",$1,"off" }'|bash
+
+运行完成上面的命令后,查看剩下的运行状态为3的,开启状态的服务
+chkconfig --list|grep "3:on"
+
+2.先查看chkconfig --list
+	过滤出开启的运行级别为3的服务
+	将所有开启的服务关闭
+chkconfig --list|grep "3:on"|awk '{print "chkconfig",$1,"off" }'|bash
+	开启需要开启的5个重要自启动服务
+chkconfig --list|grep "3:off"|egrep "sshd|rsyslog|network|crond|sysstat"|awk '{print "chkconfig",$1,"on" }'|bash
+
+运行完成上面的命令后,查看运行状态为3的,开启状态的服务
+chkconfig --list|grep "3:on"
+
+
+linux文件类型
+915713 dr-xr-xr-x.  2 root root  4096 Jun 30 03:19 root
+915714 -rw-r--r--.  1 root root 22179 Jun 29 12:42 install.log
+
+第一列: (915713 915714 inode文件索引节点编号,一个系统中唯一的,centOS6 inode大小默认256字节,在分区格式化创建文件系统前可以指定inode大小,但是目前生产环境也用不上更大的字节了)
+		系统读取文件时,首先通过文件找到inode,然后才能读取到文件内容
+		创建文件系统(ext4 格式化)会生成第一部分inode(很多) 和 第二部分block(很多)
+		文件内容存储在block中(照片,视频,文件数据),对于一个文件是唯一的
+		文件的属性存储在inode中(即:ls -l的结果,唯独不包括文件名,文件名在上一级目录的block里),一个文件可以有多个,因为一个block可能存不下那么大的内容
+		
+		stat /路径/文件  (可以查看文件的详细属性)
+		
+第二列:文件类型及权限(共11个字符,
+		第一个字符为类型: - 表示文件, d 表示目录,
+		后9个字符为文件权限(有没有访问,修改,执行,删除等权限)
+		最后一个 . 是和selinux相关的(开启创建的文件带. 不开启创建文件就不带. (在 /etc 下可看到),暂未发现有什么用处
+		
+第三列:硬链接数量(硬链接 一个超市的多个入口,硬链接 也类似备份的作用,一个入口被删除,或者访问堵塞,可以通过另一个入口访问)
+
+第四列:文件或目录所属的用户(属主, 主人)
+		linux里面文件和程序的存在必须要有用户和组满足相应的存在需求
+
+第五列:文件或目录所属的用户组
+
+第六列:文件的大小
+
+第七,八,九列:文件或目录的时间(默认修改时间)
+stat 文件名显示下面三个时间
+modify修改(一般是修改文件内容)			-mtime
+change改变时间(文件的属性改变)			-ctime
+access访问时间(访问文件内容)			-atime
+ls -lhi --time-style=long-iso /				规范显示时间
+
+
+第十列:实际的文件或目录名(文件名 严格意义上不算文件属性,文件尽量不要使用@!等特殊符号作为文件名)
+
+
+
+15.dumpe2fs查看文件系统内部信息(包含元数据 inode block)
+查看文件信息
+dumpe2fs /路径/文件名
+查看磁盘信息(/dev/sda3这块磁盘的block 和 inode数量)	
+dumpe2fs /dev/sda3|egrep -i "block count|Inode count"
+显示
+dumpe2fs 1.41.12 (17-May-2010)
+Inode count:              1234576
+Block count:              4929280
+Reserved block count:     246464
+
+即默认inode数量是要小于block的数量的
+低概率(可能出现df -h 还有磁盘剩余,但是显示 no space on device left,说明inode满了)
+
+查看root文件索引节点编号大小
+
+
+16.查看磁盘的使用量
+查看inode 和 block使用情况
+df -i 
+
+查看磁盘使用情况(人类可读)
+df -h
+
+磁盘空间是否满了:(特征: no space on device left)
+第一个是inode是否满了,第二个是block是否满了,任何一个满了,都无法放你最喜欢的片了
+企业级服务,邮件服务会产生大量的临时小文件,可能会导致inode满,网上有删除该临时文件的方法
+
+磁盘被分区并格式化为ext4文件系统后会生成一定数量的inode和block
+inode称为索引节点,它的作用是存放文件的属性信息以及作为文件的索引(指向文件的实体)
+ext3/ext4 文件系统的block存放的是文件的实际内容
+inode是磁盘上的一块存储空间,C6非启动分区inode默认大小256字节,C5是128字节
+inode的表现形式是一串数字,不同的文件对应的inode(一串数字)在文件系统(分区)是唯一的
+inode相同的文件,互为硬链接文件,可以认为是一个文件的不同入口
+ext3/ext4文件系统下,至少要占用一个inode和一个block,文件很大,则文件需要占用多个block
+block是用来存储数据的,它的大小一般有1k,2k,4k几种,其中引导分区等为1k,其他普通分区为4K(C6)
+block也不是越大越好,比如一个文件只有0.1k,而block是4k的,那么剩下的3.9k就浪费了,这就是为什么引导分区为1k
+(格式化命令:mkfs.ext4 -b 2048 -l 256 /dev/sdb     基本用不上,默认inode大小即可)
+block也不是越小越好,比如一个文件大小为1000k,block为4k,那么磁盘IO就为250次才能读取完文件;block为1k,那么
+磁盘IO就需要1000次才能读取完文件
+所以需要根据服务器的具体服务业务需求来确定,
+大文件多,block可以设置大一点,浪费磁盘空间多,但是访问性能高;
+小文件多,block可以设置小一点,浪费磁盘空间少,但是消耗大量磁盘IO
+centOS6 一般设置为4k,存放视频等大文件可以设置更大(centOS7是xfs格式,特殊处理)
+
+
+17. 文件扩展标识
+windows 是以 .exe  .bin  .jpg  .avi 来区分文件类型的
+linux   并不以文件的扩展标识 .tar  .tar.gz  .sh  来区分文件类型,但是一般为了易读,也会加上扩展后缀作为标识
+
+在linux中,可以说一切(包括目录,普通文件,设备文件等)皆为文件
+
+ls -li 的第二列中:
+第一个字符: 用来区分文件类型(可以man find 通过搜索 -type 来查看)
+			通过 file 文件名 来查看文件是什么文件类型
+			file /var/log/wtmp
+			显示为: /var/log/wtmp: data
+
+d(directory) 表示是文件目录
+		通过 mkdir,cp 创建
+		通过 rm -rf 删除
+		查看目录( ls -l /home |grep "^d" 查看第一个字符为d的,就表示是文件夹
+				  tree -Ld 1 /home		 ( -L 表示层级,后面接数字; -d表示只查看目录)
+		)
+-(regular file) 表示这是一个普通的文件
+		(纯文本文件(ascll)可直接读取到数据;二进制文件(binary),在 /bin 文件夹下,一般绿色显示; 数据格式文件(data)存放某些命令的结果(只能通过last读取) last /var/log/wtmp)
+		通过 touch,cp,tar,echo,cat,>,>>等工具命令创建
+		通过 rm -f 删除
+l(link) 表示这是一个符号链接文件,实际上它指向另一个文件
+		查看 find /etc/ -type l -name "init.d"|xargs ls -ld
+		查看源文件和连接文件(ls可以接多个文件,空格分隔)	 ls -l /etc/rc.d/init.d /etc/init.d -d  
+b(block) 表示块设备和其他的外围设备,是特殊类型的文件(例:视频)(ll -al /dev/sda 黄色,磁盘设备)
+		查看 find /dev -type b |xargs ls -al  (磁盘的block设备一般在dev中)
+		创建 mknod testCreateBlock b 5 1
+c(character) 表示字符设备文件(ll -al /dev/tty 一般黄色,主要是光猫之类设备)
+		查看 find /dev -type c |xargs ls -al  (磁盘的block设备一般在dev中)
+		创建 mknod testCreateCharacter b 5 1
+s(socket) 表示Socket文件
+p(named pipe) 表示管道文件 
+
+
+ls -li 的第二列中:(9个字符)
+文件权限控制:
+r 	4  	read 读
+w 	2  	write 写
+x 	1	execute 执行 
+- 	0	没有权限
+
+前三个字符: 	属主权限(用户权限位) 		对应第四列(用户名)
+中间三个字符:	属组权限位(用户组权限位)	对应第五列(用户组)
+最后三个字符:	其他用户权限位(非同组,其他人)				
+
+18.file 查看文件类型
+file /bin/ls
+file /var/log/wtmp
+
+19.last 查看最近登录信息
+last		直接输入,即可查看最近用户的登录信息  /var/log/wtmp 数据文件
+lastlog     显示最贱登录的用户信息  /var/log/lastlog 数据文件
+
+
+20.硬链接(Hard Link) 和 软连接(符号链接  Soft Link or Symbolic Link)(通过 rm 删除) 
+注意: 目录只能创建软链接,不能创建硬链接(针对用户,系统有自己创建的命令 .  .. 作为硬链接)
+	  文件可以创建软链接和硬链接	
+	  硬链接不能跨越文件系统
+	  mkdir -p /home/naruto/test/
+	  ls -al /home/naruto/. /home/naruto/test/.. -di
+	  可以发现:  .和..其实就是目录的硬链接( 3 是 创建naruto文件本身 + naruto下的. + test的.. = 3
+	  drwx------. 3 naruto naruto 4096 Aug  8 09:14 /home/naruto/.
+	  drwx------. 3 naruto naruto 4096 Aug  8 09:14 /home/naruto/test/..
+
+
+ln -s 源文件 目标文件(连接的目标文件不能事先存在)			创建软连接
+	多了一个快捷方式
+	新创建的链接文件有自己的新的inode,和源文件的inode不一样,block也是不一样的
+	源文件删除,软链接不会被删除,但是无法访问,颜色会变成红色闪烁,表示找不到源文件( No such file or directory)
+	主要用于访问需要携带版本号的文件,或文件夹,创建软链接可以方便输入,查看;之后切换版本就删掉之前的软链接,新建一个一样名称的软链接指向新版本
+ln 源文件 目标文件(连接的目标文件不能事先存在)				创建硬链接
+	(和 cp 的区别:cp之后,属于两个不同的文件,有不同的inode;而 ln 后是同一个文件(相同的inode),不同的入口,通过不同入口都可以修改文件实体,指向同一个block)
+	一个文件的多个入口,还可以防止文件被误删,相当于快照
+	具有相同的inode节点号
+	删除链接文件或者源文件任意之一,文件实体并未被删除
+	删除了源文件和所有对应的硬链接文件,文件实体才会被删除
+	当文件实体被删除后,再存放新的数据会占用这个文件的空间,或者磁盘检查的时候,数据也会被系统回收(养成测试环境测试删除不影响正常运行后,再生产备份后删除)
+
+mkdir -p /home/test/
+cd /home/test/
+echo 'nier passwd dumpe2fs last lastlog' > luffy.txt;
+ln luffy.txt luffy_h.txt;
+ls -lhi	;
+可以看到 inode 的值是一样的
+400074 -rw-r--r--  2 root root   34 Aug  8 04:58 luffy_h.txt
+400074 -rw-r--r--  2 root root   34 Aug  8 04:58 luffy.txt
+
+echo 'ln ln -s ls -lhi echo touch' > luffy_h.txt
+cat luffy.txt		可以发现源文件也被同样的修改了
+rm -f luffy.txt
+cat luffy_h.txt		发现该文件依然可以被正常访问,内容也没有丢失
+ls -lhi	;
+可以看到第三列的值从2个硬链接变成了1
+400074 -rw-r--r--  1 root root   24 Aug  8 05:02 luffy_h.txt
+恢复文件的方式
+cat /home/test/luffy_h.txt > /home/test/luffy.txt	
+或
+mv /home/test/luffy_h.txt /home/test/luffy.txt
+ln luffy.txt luffy_h.txt;
+
+注:linux删除静态文件(没有进程调用的文件),相关的所有硬链接文件均被删除后,文件就不存在了
+
+
+21.web服务器磁盘满故障分析
+df -h 发现磁盘满了,删除较大日志文件,依然是满的
+du -sh /*查看时占用硬盘空间之和还远小于硬盘大小
+
+问题在于,进程占用了该日志文件,文件并未被真正删除,
+需要重启服务才能将文件释放
+或
+echo > 日志文件
+
+yum install httpd -y
+/etc/init.d/httpd start			开启安装的 httpd 服务
+/etc/init.d/iptables stop		关闭防火墙
+查看 80 端口是否被服务占用,占用表示服务已经启动
+lsof -i :80
+修改配置文件
+vi /etc/httpd/conf/httpd.conf
+预览替换后的结果(@等特殊字符可以替换#,避免一些含有#的注释文本替换会出现#重叠问题
+sed 's@CustomLog logs/access_log combined@CustomLog /app/logs/access_log combined@g' /etc/httpd/conf/httpd.conf|grep 'CustomLog'
+替换
+sed -i 's@CustomLog logs/access_log combined@CustomLog /app/logs/access_log combined@g' /etc/httpd/conf/httpd.conf
+查看替换结果
+grep 'CustomLog'
+创建一个小的文件系统(使用dd命令, if=/dev/zero 物理空间来源, of=/dev/sdc 生成的文件系统, bs=8k 块大小为8k, count=10 共10个block块
+dd if=/dev/zero of=/dev/sdc bs=8k count=10
+格式化文件系统
+mkfs -t ext4 /dev/sdc
+取消磁盘检查(防止每180天的检查)
+tune2fs -c /dev/sdc
+创建日志记录文件
+mkdir /app/logs -p
+将磁盘指定一个文件挂载点
+mount -o /dev/sdc /app/logs
+查看挂载磁盘信息
+df -h
+重启安装的 httpd 服务(apache)
+/etc/init.d/httpd restart			
+发现httpd: apr_sockaddr_info_get() failed for CentOS61,需要配置主机名解析
+vi /etc/hosts
+在hosts文件后面添加上提示的未解析的主机名CentOS61即可
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 CentOS61
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6 CentOS61
+
+创建访问首页
+echo 'apache httpd test' > /var/www/html/index.html
+使用循环,访问apache服务器,增大日志容量,以便演示磁盘满,删除被占用的日志文件,但是磁盘未释放空间情况
+(注意 ` 是数字1旁边的波浪线下面的符号,不是单引号 ' 
+for n in `seq 100000`;do curl 127.0.0.1;done
+查看磁盘使用情况,发现磁盘空间是99%了
+df -h
+删除对应文件
+rm -f /app/logs/access_log
+查看磁盘使用情况,发现磁盘空间依然是99%了(block满了)
+df -h
+查看被删除的文件,发现文件确实被删除,但是文件被apache占用
+lsof|grep del
+
+所以,这时候只能重启服务了;故:不要删除服务正在占用的服务,而是应该使用 > 文件名 来清空文件内容
+
+模拟block满了
+cp /bin/ls /app/logs
+查看磁盘,发现占用100%了
+df -h
+删除占用磁盘的大文件
+rm -f /app/logs/ls
+
+模拟inode满了
+touch /app/logs/test{1..10}
+查看磁盘,发现占用只有22%
+df -h
+但是inode占用达到100%
+df -i
+删除文件
+rm -f /app/logs/test*
+
+
+22.linux用户体系
+UID(User Identify)中文用户ID,相当于各位的身份证一样,在系统中是唯一的
+GID(Group Identiy)中文组ID,相当于家庭ID
+
+linux用户分为三类
+
+超级管理员(默认UID=0,GID=0)
+grep root /etc/passwd
+root:x:0:0:root:/root:/bin/bash
+operator:x:11:0:operator:/root:/sbin/nologin
+第一个0表示用户UID是0;第二个0表示用户的GID是0
+
+普通用户(一般生产使用的用户 UID从500开始)
+
+虚拟用户(不能登录,虚拟角色 数据库会使用)
+vim /etc/passwd
+可以发现虚拟用户结尾是 nologin
+root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+
+创建用户(通过 useradd 会修改下面四个文件)
+useradd test
+tail -1 /etc/passwd						密码文件
+即可看到test的相关信息
+test:x:501:501::/home/test:/bin/bash
+账号名称:账号密码(在shadow存放):账号UID:账号组GID:用户说明:用户家目录:shell解释器
+
+shell解释器可以通过/etc/shells查看
+cat /etc/shells
+/bin/sh
+/bin/bash
+/sbin/nologin
+/bin/dash
+/bin/tcsh
+/bin/csh
+
+
+tail -1 /etc/shadow						影子用户口令文件(存放密码)
+test:!!:18116:0:99999:7:::
+账号名称:账号密码:最近更改密码的时间:禁止修改密码的天数:用户必须更改口令的天数:警告更改密码的期限:不活动时间:失效时间:标志
+tail -1 /etc/group
+test:!::
+
+tail -1 /etc/gshadow
+test:x:501:
+
+删除测试用户test
+userdel test
+userdel -r test		(递归删除自动生成的test用户的目录)
+
+
+
+23.查看用户和组
+id 用户名(不接用户名则显示当前用户的UID和GID信息)
+
+24.查看文件大小
+du -sh
+
+25.linux通配符和三剑客(grep,awk,sed)正则表达式是不一样的
+通配符一般用户命令行bash环境,而linux正则表达式用于grep,sed,awk场景
+
+*	-	通配符,代表任意(0到多个)字符
+?	-	通配符,代表任意1个字符
+;	-	连续不同命令的分隔符
+#	-	配置文件注释
+|	-	管道
+~	-	用户的家目录
+-	-	上一次的目录
+$	-	变量前需要加的符号
+/	-	路径分隔符号
+> 或 1>		-	重定向,覆盖原有数据
+>>	-	追加重定向,追加输出(追加内容至文件尾部)
+< 	-	输入重定向(xargs,tr)
+<<	-	追加重定向,追加输入(cat)
+`	-	tab键上面的键,反引号,两个``中间为命令,会先执行,等价$()
+'	-	单引号,不具有变量置换功能,输出明文,所见即所得(直接输入 date 会显示时间,但是 echo 'date' 就只会显示date
+"	-	双引号,具有变量置换功能,解析变量后输出,不加引号相当于双引号(如果""里面是变量或者命令就会进行解析,要配合``使用)
+		echo "`date`"    输出日期
+		echo `date`		 输出日期(不加引号相当于双引号)
+		echo "$(date)"	 输出日期
+		echo '`date`'	 输出 `date`
+		echo "date"		 输出 date ,要结合其他变量或命令才能进行解析
+		echo date		 输出 date ,一般不加引号和加引号的输出显示是一样的	
+{}	-	中间为命令区块组合或内容序列
+		echo /home/test{1..5}		创建test1-test5文件
+		cp test1{,.bak}				创建test1的备份test1.bak
+!	-	逻辑运算中的"非"(not)
+&&	-	并且(and,短路效果)当前一个指令执行成功时,执行后一个命令
+||	-	或者(or,短路效果)当前一个指令执行失败时,执行后一个指令
+..	-	上一级目录
+.	-	当前目录
+
+
+26.正则表达式
+正则表达式就是为处理大量的字符串而定义的一套规则和方法
+为了让匹配的内容显示颜色,需要使用别名,修改
+
+vi /etc/profile
+alias grep='grep --color=auto'
+
+调整字符集(临时修改,永久需要 vi /etc/profile )
+export LC_ALL=C 
+
+例子:
+cat >>test.log<<TESTFLAG
+I am oldboy teacher!
+I teacher linux.
+
+I like badminton ball,billiard ball and chinese chess!
+my blog is http://oldboy.blog.51cto.com 
+our site is http://www.etiantian.org
+my qq num is 49000448.
+
+not 4900000448.
+my god,i am not oldbey,but good OLDBOY!
+TESTFLAG
+
+第一批字符:
+^word	匹配以word开头的内容.	vi/vim里^代表一行的开头
+word$	匹配以word结尾的内容.	vi/vim里$代表一行的结尾
+^$		表示空行
+
+
+筛选以my开头的行
+grep "^my" test.log
+筛选以!结尾的行, ! 需要转义字符进行转义,否则是"非"的意思
+grep "\!$" test.log
+筛选空行( -n 显示行号 )
+grep -n "^$" test.log		
+
+第二批字符:
+.	代表且只能代表任意一个字符
+\	转义符号,例\.就只代表.本身,让有着特殊身份意义的字符脱掉马甲
+*	重复0个或多个前面的一个字符,例x*匹配没有x或者有多个x(xxxxxx)的字符
+.*	匹配所有字符,延伸^.*以任意多个字符开头; 而.*$以任意多个字符结尾
+
+匹配所有字符
+grep "." test.log
+或
+grep ".*" test.log
+筛选以.结尾的行, . 需要转义字符进行转义, -o 表示只显示匹配中的字符
+grep -o "\.$" test.log
+
+
+第三批字符:
+[abc],[a-zA-Z],[0-9]	匹配字符集合内的任意一个字符
+[^abc],[^a-z]			匹配不包含^后的任意一个字符的内容(这时候^在中括号里面是取反的意思,而不是以什么开头了)
+a\{n,m\}				重复n到m次,前一个重复的字符.如果用egrep/sed -r可以去掉斜线(\)转义
+a\{n,\}					重复至少n次,前一个重复的字符.如果用egrep/sed -r可以去掉斜线(\)转义
+a\{n\}					重复n次,前一个重复的字符.如果用egrep(等价 grep -E)/sed -r可以去掉斜线(\)转义
+a\{,m\}					最多匹配m次(最多三次0,5个0也会匹配中,因为前3个0算一批,后两个0又算一批匹配)
+						所以,其实就是匹配0-m次,匹配完剩下的还会被匹配,基本等价匹配所有该字符
+
+
+筛选出abc和0123这些字符
+grep "[abc0-3]" test.log
+筛选出a-z和0123这些字符
+grep "[^a-z0-3]" test.log
+筛选出0出现3次的字符
+grep "0\{3\}" test.log
+筛选出0出现3-4次的字符
+grep "0\{3,4\}" test.log
+筛选出0出现至少3次的字符
+grep "0\{3,\}" test.log
+筛选出0出现最多3次的字符(5个0也会匹配中,因为前3个0算一批,后两个0又算一批匹配)
+grep "0\{,3\}" test.log
+通过 -E 来直接转义特殊字符,不要添加转义的\
+grep -E "0{3,4}" test.log
+
+
+
+扩展的正则表达式(Extended Regular Expressions)
+使用的命令为: grep -E 以及 egrep
+
++	表示重复"一个或一个以上"前面的字符(*是0或多个)
+?	表示重复"0个或一个"前面的字符( 区别于 . 是有且只有一个)
+|	表示同时过滤多个字符串
+()	分组过滤,后向引用
+
+匹配go+d(g和d中间有一个或多个o)
+grep -E "go+d" test.log
+查看是否有mysql或者oracle服务
+egrep "3306|1521" /etc/services
+
+
+点(.)的特殊含义小结
+1.当前目录
+2.使得文件生效,相当于source
+3.隐藏文件
+4.任意一个字符(grep正则)
+
+
+实际应用1:
+获取ifconfig中的ip
+替换
+sed 's#可以使用正则的位置##g'
+打印输出(-n取消默认输出,p打印)
+sed -nr 's###g2p'
+
+实现方式一:(-n 取消默认输出,不会输出所有的内容, -n 和 p是要一起使用,不然就没有输出显示了(p打印输出))
+先筛选出第二行并打印(sed -n '2p')
+再将"开头"至"addr:"的部分替换成空并打印(sed -n 's#^.*addr:##gp')
+ifconfig|sed -n '2p'|sed -n 's#^.*addr:##gp'|sed -n 's#  Bcast.*$##gp'
+
+ifconfig|sed -n '2s#^.*addr:##gp'|sed 's#  Bcast.*$##g'
+
+
+实现方式二:
+sed -nr 's#()()#\1\2#gp' 文件名
+当在前面匹配部分用小括号的时候,
+第一个括号的内容,可以在后面用\1输出
+第二个括号的内容,可以在后面用\1输出
+
+先把头匹配上
+再于括号中匹配需要输出的内容
+最后匹配上结尾的数据
+ifconfig|sed -nr '2s#^.*addr:(.*)  Bcast:.*$#\1#gp'
+
+精确匹配( -r 表示转义() {} [] 等特殊符号)
+ifconfig|sed -nr '2s#^.*addr:([0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3})  Bcast:.*$#\1#gp'
+
+awk方式(分割符为空格或冒号,+表示可以匹配1个或多个  NR==2表示第二行  $4表示第四个元素($0表示整行))
+ifconfig|awk -F "[ :]+" 'NR==2 {print $4}'
+
+特殊思路:
+grep IPADDR /etc/sysconfig/network-scripts/ifcfg-eth0|awk -F "=" '{print $2}'
+-d指定分隔符 -f指定获取分隔开的第几个字段
+grep IPADDR /etc/sysconfig/network-scripts/ifcfg-eth0|cut -d= -f2
+
+
+获取stat /etc/hosts的0644数字
+stat /etc/hosts|sed -nr '4s#^.*ss: \((.*)/-.*$#\1#gp'
+使用awk获取:(分隔符为 0 或 / )
+stat /etc/hosts|awk -F "[0/]" 'NR==4 {print $2}'
+使用grep的perl-regexp( \d 匹配所有数字)
+stat /etc/hosts |awk NR==4|grep -Po '(?<=0)\d+'
+特殊思路:一般一个命令中出现了你想获取的数据,那么这个命令一般会包含获取该数据的方式
+(stat --help发现-c下面的格式化中,包含了%a   Access rights in octal,即为文件权限值)
+stat -c %a /etc/hosts
+
+
+需求:将tail /etc/passwd中以:作为分隔符,第一列和最后一列调换(注意,sed的处理是每行进行处理)
+处理:先匹配开头,再匹配中间,最后匹配结尾;最后把第一个和最后一个数据换位置,即可
+第一组
+[]表示一组正则数据,[]里的^:表示非冒号数据,()表示一组数据,以便 \数字 来后向引用交换位置
+第二组
+表示冒号开始,中间可以是任意字符,但是以冒号结束
+第三组
+表示以 / 开始,后面为任意字符
+
+tail /etc/passwd|sed -nr 's#([^:]*)(:.*:)(/.*$)#\3\2\1#gp'
+
+
+
+获取一个目录的信息,将其中的权限信息 rwxr-xr-x 转换成数字
+例:ls -l /app/logs/access_log
+drwxr-xr-x 3 root root 1024 Aug  8 12:31 logs
+
+实现方式:
+tr - translate or delete characters(逐个字符替换)
+
+(-c2-10截取对应位置的字符)
+ls -l /app/logs/access_log|cut -c2-10
+(tr替换,将"rwx-"分别替换为"4210")
+ls -l /app/logs/access_log|cut -c2-10|tr "rwx-" "4210"
+( -F 指定分割符(目前分割符为 空,即任意单个字符为一组) )
+ls -l /app/logs/access_log|cut -c2-10|tr "rwx-" "4210"|awk -F "" '{print $1+$2+$3,$4+$5+$6,$7+$8+$9}'
+如果不需要空格,可以将逗号替换成""
+ls -l /app/logs/access_log|cut -c2-10|tr "rwx-" "4210"|awk -F "" '{print $1+$2+$3""$4+$5+$6""$7+$8+$9}'
+
+
+
+获取需要数据的思路
+1.通过stat输出包含目标的内容
+2.通过head tail sed awk grep 定位到单行(这些都是取行的惯用命令)
+3.通过cut awk 等设置分割符号取出需要的内容(这是取列的惯用命令)
+
+
+需求:将/home/test/.下面的所有文件中的地址进行替换
+替换前先查看替换后的结果
+find /home/test/. -type f|xargs sed "s#www.luffy.com#www.naruto.com#g"
+再进行替换
+find /home/test/. -type f|xargs sed -i "s#www.naruto.com#www.luffy.com#g"
+
+
+输出两行
+echo "test";echo "test"
+输出合并为一行
+echo -n "test";echo "test"
+使用 -e 即可用 \t制表符  \n换行符
+echo -e "123\tabc"
+echo -e "123\nabc"
+
+更新阿里云时间
+ntpdate ntp1.aliyun.com
+日期格式化
+date -s "2019/09/05 21:40"
+date +"%y-%m-%d"
+date +%F
+date +%w
+
+例:需求是打包文件需要携带日期
+反引号执行命令`` 或 $()  另tar默认只能使用相对路径,要使用绝对路径需要使用 P ,f一般放在最后面
+tar -zcvPf test`date +%F`.tar.gz /home/test/luffy.txt
+tar -zcvPf test$(date +%y_%m_%d).tar.gz /home/test/luffy.txt
+
+
+显示昨天的时间 (day 或 Day均可)
+date +%F -d "-1day"
+date +%F -d "-24hour"
+date +%F_%H -d "-24hour"
+date +"%F %H" -d "-24hour"
+
+
+
+echo "echo 'test  chmod +x /home/testEcho'" > /home/test/testEcho
+赋予文件执行权限(否则会显示无权限执行)
+chmod +x /home/test/testEcho
+执行文件
+/home/test/testEcho
+
+在命令行界面输入ls cat grep sed awk 等命令,可以执行,是因为在$PATH下面有配置这些可执行文件的路径
+(各个路径之间是使用冒号进行分割的)
+给PATH进行临时赋值(关闭当前session即会失效):
+PATH=$PATH:/home/test
+给PATH永久赋值(一定要记得包含$PATH本身,否则之前的命令就没有了,那么就无法执行ls cat vi 等命令了!!!!!!)
+export PATH=$PATH:$HOME/bin:/sbin:/你希望添加的目录路径
+
+备份
+-bash: /usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/jdk1.8.0_191/bin:/root/bin:
+
+那么这个时候可以在系统的任意路径都执行该命令了
+cd /
+testEcho
+
+which查询命令(是在$PATH下面进行查询的)
+which ls
+显示结果为ls命令是在/bin/ls下面的
+alias ls='ls --color=auto'
+        /bin/ls
+
+
+排除空行(-e 可以使用制表符,换行符等)
+echo -e "echo test e\n\n\n haha haha" > /home/test/nier.txt
+cat /home/test/nier.txt
+grep -v "^$" /home/test/nier.txt
+或者直接是用sed过滤或删除空行
+过滤
+sed '/^$/d' /home/test/nier.txt
+删除
+sed -i '/^$/d' /home/test/nier.txt
+使用awk, [^$]表示空行 ^[^$]表示非空行
+awk '/^[^$]/' /home/test/nier.txt
+
+whereis    查找命令帮助,源代码,-b 二进制
+locate	   根据名称查找文件,但是只能查询updatedb库里面的内容,即/var/lib/mlocate/mlocate.db
+
+
+关机
+shutdown -h now  立刻关机
+shutdown -h +1	 一分钟后关机
+init 0		     立刻关机
+halt		     立即停止系统,需要人工关闭电源(生产常用)
+halt -p			 立即停止系统,并且关闭电源
+poweroff		 立即停止系统,并且关闭电源
+
+重启
+reboot			 重启(生产常用)
+shutdown -r now  重启(生产常用)
+shutdown -r +1   一分钟后重启(生产常用)
+init 6			 重启
+
+注销
+logout			 注销
+exit			 注销
+Ctrl + d		 快捷键注销(生产常用)
+
+
+sed [options] [sed-commands] [input-file]
+sed [选项] [sed命令] [输入文件]
+sed 是 Stream Editor(流编辑器)缩写,是操作,过滤和转换文本内容的强大工具
+注意:
+sed和后面的选项之间至少有一个空格
+为了避免混淆称sed为sed软件,sed-commands(sed命令)是sed软件内置的一些命令选项,为了和前面的option(选项)区分,故称为sed命令
+sed-commands既可以是单个sed命令,也可以是多个sed命令组合
+input-file(输入文件)是可选项,sed还能够从标准输入和管道获取输入
+
+命令执行流程
+概括流程:sed软件从文件或管道中读取一行,处理一行,输出一行;
+再读取一行,再处理一行,输出一行
+
+cat >> /home/test/person.txt <<EOF
+101.oldboy.CEO
+102.zhangyao.CTO
+103.Alex.COO
+104.yy.CFO
+105.feixue.CIO
+EOF
+
+sed单行增加(commands的 a 表示在哪行后面增加一行,前面的数字表示第几行后面)
+显示106在第二行后面(要想插入文件中,需要增加options -i )
+sed '2a 106,dandan,CSO' /home/test/person.txt
+
+sed单行增加(commands的 i 表示在哪行增加一行,前面的数字表示在第几行插入,文件当前行会被挤到后面)
+sed '2i 106,dandan,CSO' /home/test/person.txt
+
+sed如果想增加两行,建议使用 \n 换行符
+sed '2a 106,dandan,CSO\n107,bingbing,CCO' /home/test/person.txt
+
+也可以使用 \ 在命令行界面进行换行
+sed '2a 106,dandan,CSO \
+107,bingbing,CCO' /home/test/person.txt
+
+
+在/etc/ssh下面的ssh_config可以优化远程登录ssh的配置
+vim /etc/ssh/ssh_config
+添加下面5行来优化安全上的性能
+port 52113
+PermitRootLogin no
+PermitEmptyPassword no
+UseDNS no
+GSSAPIAuthentication no
+
+先vim /etc/ssh/ssh_config找到需要插入的行数,是否适合(在第13行当行添加)
+再使用sed进行插入
+sed '13i port 52113 \
+PermitRootLogin no \
+PermitEmptyPassword no \
+UseDNS no \
+GSSAPIAuthentication no' /etc/ssh/ssh_config
+
+sed软件可以对单行或多行进行处理,如果在sed命令前面不指定范围,那么默认会匹配所有行
+用法: n1[,n2]{sed-commands}
+地址用逗号分隔,n1,n2可以用数字,正则表达式或二者的组合表示
+例子:
+	10{sed-commands}			对第10行操作
+	10,20{sed-commands}			对10到20行进行操作,包括10,20行
+	10,+20{sed-commands}		对10到30行进行操作,包括10,30行
+	1~2{sed-commands}			对1,3,5,7等差序列为行号的行进行操作(第一个数字是开始值,第二个数字是步长)
+	10,${sed-commands}			对10到最后一行($表示最后一行)操作,包括10行
+	/gin/{sed-commands}			对匹配了gin的行操作
+	/gin/,/Alex/{sed-commands}	对匹配了gin的行到匹配了Alex的行进行操作
+	/gin/,${sed-commands}		对匹配了gin的行到最后一行进行操作
+	/gin/,10					对匹配了gin的行到第10行进行操作,注意:如果第十行也有gin,那
+								么会变成对第十行后面的行进行操作
+	1,/Alex/{sed-commands}		对第一行到匹配到Alex的行进行操作
+	/gin/,+2{sed-commands}		对匹配到gin的行及其后的两行进行操作
+	
+	
+sed删除行
+	在d命令前面不加行号的话就是删除所有行
+	sed 'd' /home/test/person.txt
+	删除第2行
+	sed '2d' /home/test/person.txt
+	删除第2至4行
+	sed '2,4d' /home/test/person.txt
+	删除第1,3,5,7等差序列行(第一个数字是开始值,第二个数字是步长)
+	sed '1~2d' /home/test/person.txt
+	删除1-3行
+	sed '1,+2d' /home/test/person.txt
+	删除含有zhangyao的行
+	sed '/zhangyao/d' /home/test/person.txt
+	虽然在第五行才比中feixue,逗号后面的第2行无法匹配中,但是依然会执行被feixue匹配中的行
+	sed '/feixue/,2d' /home/test/person.txt
+
+
+sed替换行
+sed '2c 106,dandan,CSO' /home/test/person.txt
+
+sed文本替换
+	s:单独使用->将每一行中"第一处"匹配的字符串进行替换 ==>sed命令
+	g:每一行进行全部替换 ==>sed命令s的替换标志之一,非sed命令
+	-i 修改文件内容(有了-i才会修改硬盘中的内容,否则只会改内存中的内容) ==>sed软件选项,非sed命令
+	
+# /等都能作为定界符,建议用#,避免一些不必要的转义
+sed 's#要被替换的内容#用于替换的文本#g' /home/test/person.txt
+注意:"要被替换的内容"可以使用正则表达式,但是"用于替换的文本"不能使用正则表达式
+
+指定只替换第一行的
+sed '1s#O#X#g' /home/test/person.txt
+替换范围行
+sed '1,3s#O#X#g' /home/test/person.txt
+替换所有行
+sed 's#oldboy#oldgirl#g' /home/test/person.txt
+特殊符号 & 表示"被替换的内容";即可通过&对其进行引用
+sed '1,3s#C#--&--#g' /home/test/person.txt
+
+
+创建测试文件
+cat >> /home/test/test.txt <<EOF
+a
+b
+c
+a
+EOF
+
+对变量进行赋值
+x=a
+y=b
+打印变量的值
+echo $x $y
+替换文件中变量的值
+单引号不会解析变量或者命令,只会原样输出
+sed 's#$x#$y#g' /home/test/test.txt
+
+双引号会先解析变量或者命令的值,然后再执行命令
+sed "s#$x#$y#g" /home/test/test.txt
+
+注意:不加引号的情况下是跟加双引号的效果一样的
+sed s#$x#$y#g /home/test/test.txt
+
+还有两种特殊的解析方式(''有种负负得正的感觉,eval是命令方式解析)
+sed 's#'$x'#'$y'#g' /home/test/test.txt
+eval sed 's#$x#$y#g' /home/test/test.txt
+
+
+创建1-5共五个文件
+touch /home/test/stu_102999_{1..5}_finished.jpg
+创建1和5两个文件
+touch /home/test/stu_102999_{1,5}_finished.jpg
+
+先编写改名命令
+cd /home/test;ls *.jpg|sed -r 's#(.*)_finished.*#mv & \1.jpg#g'
+再交给bash执行
+cd /home/test;ls *.jpg|sed -r 's#(.*)_finished.*#mv & \1.jpg#g'|bash;ll;
+
+特殊方式:(使用重命名命令)
+rename "需要被替换的名称部分" "替换成的名称部分" 哪些文件名需要被替换
+rename "_finished" "" *
+
+
+查
+p输出指定内容,但默认会输出两次,因此使用 -n (options)取消默认输出
+会重复输出
+sed '1,3p' person.txt
+取消默认输出
+sed -n '1,3p' person.txt
+混合查询
+sed -n '2,/CFO/p'  /home/test/person.txt
+
+
+ln make LiNks between files
+无参数		创建硬链接(使用较少,一般使用的话是用于备份文件)
+-s			创建软连接(soft symbolic)(类似于快捷方式)
+ln option 源文件 目标文件(目标文件不能事先存在)
+
+可发现硬链接inod数值一致
+cd /home/test/;ln /home/test/test.txt /home/test/test.hard;ll -hid test.txt test.hard
+
+注意:inode值一致的文件是同一个文件,但是必须要注意的是在同一块磁盘上面;不同磁盘有自己的inode
+发现proc的inode为1(但是prod是存储在内存中的inode为1的文件,区别于在磁盘中的inode的文件)
+ll -hid /proc
+查看磁盘上inode值为1的文件
+find / -type d -inum 1
+/sys就是磁盘上inode为1的文件
+ll -hid /sys
+
+创建软连接
+ln -s test.txt test.soft;ll;
+删除软连接:特别注意,不要使用 rm -rf,最多只能使用 rm -f 并且不能用tab补全为目录(即后缀含/)
+上述情况可能会把文件本身下面的文件删除,而不仅仅是软连接,容易导致严重生产问题!!!!!!
+最好使用mv命令移走即可(移动至/tmp文件夹即可)
+例:
+mkdir -p /home/test/mysql5.7;cd /home/test/;
+ln -s mysql5.7 mysql
+mv mysql /tmp/			推荐
+或
+rm -f mysql				慎用
+
+查看软连接文件指向哪个链接
+readlink 软连接文件
+
+readlink test.soft
+
+
+basename
+剔除路径,只显示文件名
+basename /home/test/person.txt
+剔除路径,并截取文件后缀
+basename /home/test/person.txt .txt
+剔除路径,并截取
+basename /home/test/person.txt son.txt
+
+获取目录
+dirname /home/test/person.txt
+
+file查看文件属性
+file /home/test/person.txt
+
+md5sum计算文件的md5值(md5值一致,一般文件内容一致;不一致,那么文件一定不一样)
+md5sum /home/test/test.soft
+md5sum /home/test/test.hard
+md5sum /home/test/person.txt
+
+校验文件是否被修改
+先保存原版文件的md5值:文件名
+cd /home/test/;md5sum test.txt > md5Test.log
+校验文件
+md5sum -c md5Test.log
+echo "change to test md5" >> test.txt
+再次校验发现失败
+md5sum -c md5Test.log
+
+
+新增用户组
+groupadd incahome
+新增用户(删除 userdel -r oldboy  变更用户组 usermod -g incahome oldboy)
+useradd oldboy -g incahome
+useradd oldgirl -g incahome
+useradd test
+
+
+
+echo "echo oldboy linux test" > /home/test.sh
+chmod +x test.sh
+
+改变文件所属的用户和组(前面的是用户,后面的是组)
+chown oldboy.incahome /home/test.sh
+chown -R oldboy.incahome /home/oldboy/		( -R是递归 )
+
+ll -h /home/test.sh发现其权限为(文件为谁创建的就属主 和 属组谁)
+-rwxr-xr-x 1 oldboy  incahome 23 Sep  7 04:47 test.sh
+
+打开四个窗口,分别为root oldboy oldgirl test
+测试查看权限(发现都能查看)
+cat /home/test.sh
+
+测试写权限(发现只有root oldboy可以写,其他提示为Permission denied)
+echo "  echo test add" >> /home/test.sh
+
+测试执行(文件本身需要可执行)
+/home/test.sh
+
+修改文件权限(属组添加写权限,其他用户无执行权限)
+chmod g+w,o-x /home/test.sh
+
+发现同组的oldgirl也可以修改该文件了,test还是不能修改,且不能执行了
+
+修改文件权限(属组减少读权限)(g-r取消读 g+r添加读 g=r只有读权限)
+chmod g-r /home/test.sh
+
+发现同组的oldgirl不能读之后,直接vi或vim进去后会显示(Permission Denied,但是可以通过 :wq!强制写);可以通过echo进行写,
+同时,该组失去了对该文件的执行权限
+
+结论(对于文件):
+1,可读r:表示具有读取\阅读文件内容的权限
+2,可写w:表示具有新增,修改文件内容的权限
+3,如果没有r配置,vi编辑提示无法编辑(但可强制编辑),或echo可以重定向或追加
+4,可执行:文件本身需要可执行;普通用户需要有r权限才能执行,root用户有x即可执行
+
+结论(对于目录):
+1.可读r:表示具有浏览目录下面文件及子目录的权限,即ls dir 
+	如果没有x权限,不能进到目录里,即无法cd dir 
+	如果没有x权限,ls列表时可以看到所有文件名.但是会提示无权限访问目录下文件
+	如果ls -l列表,所有的属性都会带有问号,也会提示无权访问目录下文件,可看到文件名
+2,可写w:表示具有增加,删除或修改目录内的文件名的权限,需要x权限配合.
+3,可执行:表示具有进入目录的权限;例如:cd dir.
+	但是没有r无法列表文件及目录,没有w无法创建和删除
+	
+
+特别提示:删除文件(修改文件名等)的权限是受父目录的权限控制,和文件本身权限无关
+(说明:文件名是存储在父目录的block里面的,并指向这个文件的inode节点,我们删除文件只是将父目录中该文件的文件名删除,
+即父目录不会显示改文件名,且使得该block无可指向的inode;文件名就像inode和block的中间人,中间人断了,那么inode和block会在系统需要的时候被回收,
+所以是否能删除文件,需要看父目录的权限控制)
+(权限属于文件本身的inode,而文件名属于父目录的block)
+
+
+改变文件属性命令chmod(change mode) - change file access permissions
+可以发现chmod命令是在/bin/chmod下面的
+which chmod
+chmod 数字权限方法 (推荐)
+chmod [数字组合] 文件名 
+数字方法说明(三位为一组,即用户 用户组 其他)
+r		4
+w		2
+x		1
+-		0
+rwxr-xr-x 		755
+八进制数字			权限 
+0					---
+1					--x 
+2					-w-
+3					-wx
+4					r--
+5					r-x
+6					rw-
+7					rwx
+
+chmod 字符授权表示法
+chmod [用户类型][+|-|=] [权限字符] 文件名
+用户类型 u(user) g(group) o(other) a(all)
+操作字符 +(增加) -(减少)  =(设置)
+权限字符 r  -  w  x
+
+chmod u-x 
+
+
+不是特别推荐使用,功能不错,但是会带来安全隐患
+特殊权限位(set id 相当于皇帝给的尚方宝剑,权限很大,但是还是用户自己;su 就是自己当皇帝)
+ls -l `which passwd`
+可以看到s表示
+-rwsr-xr-x. 1 root root 30768 Feb 22  2012 /usr/bin/passwd
+
+suid权限
+touch /home/oldboy/test.txt
+使用其他用户删除(非root,非文件创建者)
+rm -f /home/oldboy/test.txt
+给所有用户赋予删除权限
+chmod u+s /bin/rm
+或(4表示在用户位加上特殊权限s)
+chmod 4775 /bin/rm	
+
+使用其他用户来删除(之前不给rm赋予特殊权限时,是无法删除的)
+rm -f /home/oldboy/test.txt
+
+suid		s(包含x权限,占用x的位置)	s	4(用户对应的权限位,用户权限的第三位)
+sgid		s(包含x权限,占用x的位置)	s	2(组对应的权限位,组权限的第三位)
+sticky 		t(包含x权限,占用x的位置)	t	1(其他用户对应的权限位,其他用户权限的第三位)
+
+例:
+chmod 4775 /bin/rm		属用户特殊权限(chmod u+s)
+chmod 2775 /bin/rm		属组特殊权限(chmod g+s)
+chmod 1755 /bin/rm		其他用户特殊权限(chmod o+t)最不安全,案例就是 /tmp 文件夹,要侵入,木马就先放在/tmp文件夹中
+
+
+改变文件所属关系命令 chown
+chown(change owner)
+chown [选项]... [所有者][:[组]] 文件...  
+例:
+chown 用户 文件或目录 
+chown :组  文件或目录 (等同于chgrp 组 文件或目录)
+chown 用户:组 文件或目录
+chown -R 用户:组 文件或目录(-R 递归改变目录下所有文件)
+
+注意:
+:可以使用.来代替
+用户和组都必须是linux下存在的
+
+
+锁定文件,避免误删或者误改(需要 chattr -i /oldboy/test.txt 进行解锁)
+chattr +i /oldboy/test.txt  ( i 表示不可变,不能删)
+chattr +a /oldboy/test.txt	( a 表示只能追加,不能删)
+
+linux系统基础优化
+把/etc/passwd,/etc/shadow,/etc/group,/etc/gshaow,/etc/inittab进行锁定
+chattr +i /etc/passwd,/etc/shadow,/etc/group,/etc/gshaow,/etc/inittab
+
+
+仅开启的服务
+chkconfig|egrep "sshd|network|sysstat|crond|rsyslog"
+
+定时任务crond介绍
+crontab指令选项说明含义表
+-l 			crontab -l		查看crontab文件内容,提示:l可以理解为list的缩写
+-e 			crontab -e		编辑crontab文件内容,提示:e可以理解为edit的缩写
+-i  		crontab -ri		删除crontab文件内容,删除前会提示确认,使用较少
+-r  		crontab -r		删除crontab文件内容,使用较少
+-u user  	crontab -u oldboy -l		指定使用的用户执行任务
+
+
+cat /etc/crontab   查看7个参数描述
+分 时 日 月 周 用户 命令(cmd)
+00 23 * * * cmd			每天的23:00都会执行cmd任务
+00 17-19 * * * cmd		每天的17,18,19的00分执行cmd任务
+00 17,19 * * * cmd		每天的17,19的00分执行cmd任务
+*/10 * * * * cmd		每隔10分钟执行一次cmd任务
+
+启动或者重启定时任务服务
+/etc/init.d/crond start
+/etc/init.d/crond restart
+
+查看服务是否启动
+ps -ef|grep crond|grep -v grep
+
+
+范例:
+30 3,12 * * * /bin/sh /scripts/oldboy.sh 
+在凌晨3点半和者中午12点半时执行 oldboy.sh 脚本
+
+30 */6 * * * /bin/sh /scripts/oldboy.sh 
+每隔6小时的半点执行 oldboy.sh 脚本
+
+45 4 1,10,22 * * /application/apache/bin/apachectl graceful
+每个月的1号,10号,22号的凌晨4点45分 重启apache
+
+10 4 * * 6,0 /application/apache/bin/apachectl graceful
+每周六,日凌晨4点10分 重启apache
+
+
+crontab -e，想添加新的定时任务的话输入i进行添加，类似于vi的编辑
+*/1 * * * * echo "nier luffy Gin Naruto" >> /tmp/testCrond.txt
+
+注意:
+尽量编写shell脚本来替代命令(否则需要使用全路径的命令)
+使用 crontab -e 编辑直接接命令时,百分号(%)需要使用\进行转义(使用脚本不需要转义)
+使用脚本时,命令最好使用全路径,避免无法找到命令(例:sh 需要使用/bin/sh,可以使用which查看或者whereis查看)
+或者在使用脚本时,引入环境PATH
+先 echo $PATH 获取本机的PATH值:
+/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/jdk1.8.0_191/bin:/root/bin
+
+在脚本中引入:
+#!/bin/sh
+export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/jdk1.8.0_191/bin:/root/bin
+# 那么之后的脚本就可以不要使用全路径了
+
+另:
+JAVA_HOME也需要通过export JAVA_HOME=java的jdk1.?路径 进行重新定义变量对应的路径
+例:
+export JAVA_HOME=java的jdk1.8路径
+export PATH=$JAVA_HOME/bin:$PATH
+
+注意:
+>dev/null 2>&1问题( 1>dev/null  2>/dev/null, &>dev/null )
+有了 >> /tmp/testCrond.txt 这类已经是标准输出,就不能再有 >dev/null 2>&1 这类标准输出了
+而如果没有日志输出的标准输出,那么需要在结尾追加 >dev/null 2>&1
+否则:
+CentOS5环境下
+定时任务默认会向 /var/spool/clientmqueue 中存邮件(sendmail临时队列目录),
+发送给root用户,如果任务过于频繁,容易导致inode满
+同时,在文件过多的情况下,直接rm -rf * 删除较慢,可以使用 ls | xargs rm -f
+
+CentOS6环境下
+rpm -qa postfix sendmail		查看是否安装了
+ps -ef|grep postfix				查看是否关闭了服务(/etc/init.d/postfix stop  关闭)
+那么错误信息会填充在下面目录,也会导致inode满
+/var/spool/postfix/maildrop
+
+测试:
+crontab -e 
+添加错误命令(找不到对应的.sh,并且没有 >dev/null 2>&1 )
+* * * * * /bin/sh xx.sh 
+在下面目录查看
+cd /var/spool/postfix/maildrop
+可以发现文件大小就500多k,但是量会慢慢累积,特别是定时任务多的时候
+ll -h
+
+网站访问慢:
+先top找到对应的cpu高的java(或其他)进程
+top
+top -p 进程pid			(查看对应进程变化情况)
+strace -p 进程pid		(跟踪情况)
+
+
+追踪命令 strace -f (追踪命令调用,可以看到命令执行相关信息, -p 可以查看进程的运行)
+strace -f passwd
+ 
+脚本调试使用 sh -x 脚本
+
+
+vi 命令( :set nu 可以显示行号)
+grep -w "word" xxx.log		按单词搜索,只会搜索出完全匹配的结果,word旁边有其他字符是不会匹配中
+
+
+chattr 改变文件扩展属性
+chattr [ -RVf ] [ -v version ] [ mode ] files...
+mode is +-=[acdeijstuADST]
+
+a 只能向文件追加数据(append),不能清空,不能删除
+i 文件加锁(immutable),不能追加,修改,清空,删除
+
+lsattr 显示文件扩展属性
+
+
+touch /home/chattr.txt
+chattr +a chattr.txt
+lsattr chattr.txt
+
+可以看到多了a的扩展属性
+-----a-------e- chattr.txt
+
+
+chown 改变文件的用户和属组(一般是root用户才有权限修改)
+在文件或者文件夹有扩展属性时,是不能改变其用户,属组的
+
+
+cat命令特殊用法
+cd /home
+echo -e "-2\n-1\n0" > /home/ts.txt
+echo -e "1\n2\n3" > /home/ts1.txt
+echo -e "4\n5\n6" > /home/ts2.txt
+
+使用cat将多个文件中的内容合并成一个文件中的内容
+cat ts{,1,2}.txt > /home/ts3.txt
+
+先在命令行输入下列命令
+cat > /home/ts3.txt
+再输入内容,可以换行,使用ctrl+c或ctrl+d退出输入
+cat /home/ts3.txt
+
+先在命令行输入下列命令
+cat >> /home/ts3.txt<<EOF
+再输入内容,可以换行,退出输入时输入EOF即可
+cat /home/ts3.txt
+
+或者直接将下面内容复制到命令行
+cat >> /home/ts3.txt<<EOF
+123
+234
+345
+EOF
+然后查看
+cat /home/ts3.txt
+
+
+空设备(黑洞) /dev/null (可以接收任何东西,同时保持自己是空的)
+查看空设备发现其内容也是空
+cat /dev/null
+所以可以使用下列方式来清空文件
+cat /dev/null > /home/ts3.txt
+cat /home/ts3.txt
+
+
+使用-n参数来显示行号(不忽略空行)
+echo -e "\n\n-2\n-1\n0" >> /home/ts.txt
+cat -n /home/ts.txt
+
+使用-b参数来显示行号(忽略空行)
+cat -b /home/ts.txt
+
+在行尾显示$符号
+cat -E /home/ts.txt
+
+说明每行最终就是有一个$符号的,证据:
+grep $ /home/ts.txt		(查询出来了所有行)
+
+
+压缩空行(多个空行压缩为一个空行)
+cat -s /home/ts.txt
+
+区分空格和制表符(制表符会显示为 ^I )
+cat -T /home/ts.txt
+
+也可以查看制表符(制表符会显示为\t,-n取消默认输出, l参数是显示不可见字符)
+sed -n l /home/ts.txt
+
+
+
+tac(反过来的cat,行级反向读取,优先读取最后一行,再读取倒数第二行)
+
+rev行内反向读取,123456会读取为654321
+echo 123456|rev
+
+cat >> /home/ts3.txt<<EOF
+123
+234
+345
+EOF
+
+rev ts3.txt
+
+
+wc 统计单词
+wc -l /etc/services
+
+注:more了解即可,编辑不如vi,查看不如less)
+more 文件名 (命令查看文件,本质是基于vi命令;按v则可进入编辑模式;命令也是类似)
+more /etc/services
+b					向上翻一屏查看文件
+d或f或空格键		向下翻一屏查看文件
+回车键				向下翻一行
+等于号				显示光标所在的行号
+/					可用于查询
+-数字				只显示多少行
+
+more +8888 /etc/services  直接跳至8888行(vi也有同样的用法)
+vi +8888 /etc/services
+ls /etc|more -10
+
+
+less 查看(不会像more需要将文件所有内容都加载完才会显示,less会先加载一部分)
+可以使用方向键进行上下翻页,左右滑动控制
+PgUp或b		向上翻一屏
+PgDn或f		向下翻一屏
+
+显示行号
+less -N /etc/services
+
+
+head 显示文件头部(默认前10行)
+
+head -5 								显示文件前5行
+head -c 5 								显示文件的前5个字节
+head -n -5 								除去最后5行,其他都显示(减去对应数字行数)
+head -5 /etc/inittab /etc/services 		可以接多个文件进行显示
+head -v /etc/inittab					显示文件头(名)
+
+head -5 /etc/services
+head -c 5 /etc/services
+head -n -5 /etc/services
+
+
+
+tail 查看文件尾部(默认10行)
+tail /etc/inittab			查看最后10行
+tail -5 /etc/inittab		显示最后5行
+tail -5f /etc/inittab  		实时刷新文件最后5行内容( -f )
+tail -F /不存在的文件		会一直等待,直至文件生成,然后显示文件可以访问,并显示内容
+
+tailf 是个独立的命令,但是功能和 tail -f 一样
+
+
+cut 切割
+echo "i am oldboy my qq is 1234567" > /home/ts.txt
+
+按字节切割:会显示第三个字符:a (第一个字节计数为1,空格也算一个字节)
+cut -b 3 ts.txt
+范围切割,显示:am
+cut -b 3-4 ts.txt
+选择切割+范围切割
+cut -b 1,3- ts.txt
+会显示所有,且第四个字节不会重复
+cut -b -4,4- ts.txt
+
+按字符切割(一字节=8bit,一个英文字符=1字节,一个中文字符根据编码不同=GBK:2字节;utf-8:3字节)
+cut -c 1,3- ts.txt		用法和-b一致,但是在有中文时,尽量使用-c
+
+-d 指定分隔符(-d的默认分隔符是TAB键,可以直接使用cut -f 含TAB的文件,就能查看默认的分隔符就是TAB)
+如果要从下面的显示中把第二个0取出来
+head -1 /etc/passwd
+需要使用 : 作为分隔符(同时也必须使用-f接数字来指定获取list中的第几个元素)
+head -1 /etc/passwd|cut -d : -f4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

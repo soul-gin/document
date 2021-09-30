@@ -1,0 +1,34 @@
+由于此图片虚拟机很多地方的配置文件写死了IP 所以不建议修改本机IP(有空再去研究配置文件修改)
+
+死IP  :  192.168.25.133
+
+1.将S:\vms_system下的Image_Server_FastDFS.7z解压到S:\vms下新建的文件夹中
+2.打开虚拟机根目录,找到Redis_02.vmx
+3.双击打开(VMware启动后可以修改虚拟机名字为Image_Server_FastDFS)
+4.点击启动此虚拟机
+
+5.必须选择我已移动该虚拟机(
+	我已移动该虚拟机:保存原有配置,不修改网卡配置,不生成新网卡(第一次添加该虚拟机)
+	我已复制该虚拟机:重新生成网卡配置(第二次添加必须是我已复制,生成新网卡,
+	不然IP MAC与第一次添加的虚拟机(正在运行的)冲突
+)
+
+6.用户名  root	  密码  itcast
+7.输入  startx  访问图形界面
+8.等待桌面图形出来之后  右击最右上方的"两台电脑"图标  选择EditConnections
+9.选择eth0 点击 edit  (如果是选我已复制,那么会出现eth1,且eth0配置无效了,需要配置eth1,IPV4点add新网卡)
+10.点击IPV4 Settings  (确保 Method 为 Manual  
+						Address信息为192.168.25.133  255.255.255.0  192.168.25.2  
+						DNS servers为192.168.25.2)
+	
+11.配置VMWare在虚拟网络编辑器中的默认网关参数
+	-->点击菜单栏 "编辑" 
+	-->选择 "虚拟网络编辑器"
+	-->点击 "NAT模式" 修改  子网IP为192.168.25.0
+	(注意此时 其他虚拟机需要修改
+		-->  vi /etc/resolv.conf  改成25
+		-->  vi /etc/hosts		  改成25
+		-->  vi /etc/sysconfig/network-scripts/ifcfg-eth0  改成25
+	)
+	
+12.在最右上角的root点quit  点击logout即可退出图形界面

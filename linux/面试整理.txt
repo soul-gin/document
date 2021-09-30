@@ -1,0 +1,34 @@
+JVM原理
+
+垃圾回收机制
+
+内存模型
+
+
+
+
+. 类装载
+类从被加载到JVM中开始，到卸载为止，整个生命周期包括：加载、验证、准备、解析、初始化、使用和卸载七个阶段。
+类加载器的任务就是根据一个类的全限定名来读取此类的二进制字节流到JVM中，然后转换为一个与目标类对应的java.lang.Class对象实例。
+BootstrapClassLoader、ExtClassLoader和AppClassLoader
+defineClass方法将字节码的byte数组转换为一个类的class对象实例，如果希望在类被记载到JVM时就被链接，那么可以调用resolveClass方法。
+
+mybatis原理
+
+
+hashTable HashMap
+
+索引原理 索引类型 索引个数
+索引失效
+
+springMVC
+
+事务四种级别 
+
+ACID
+
+IOC  AOP
+
+分步式事务
+
+redis穿透 雪崩 击穿

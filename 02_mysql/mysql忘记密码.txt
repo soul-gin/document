@@ -1,0 +1,69 @@
+1.停止服务(sudo 或者 su root)
+service mysqld stop
+
+2.修改 /etc/my.cnf,在[mysqld]下面添加skip-grant-tables跳过密码验证
+skip-grant-tables
+保存修改
+
+3.重启mysql
+service mysqld start
+
+4.可以通过whereis mysql找到mysql安装路径
+输入：mysql -u root -p
+密码为空，直接回车
+
+5.接着需要选择一个数据库：
+use mysql;
+
+6.修改密码为123456,并授权远程,本地登录
+update user set authentication_string=password("123456") where user="root";
+update user set authentication_string=password("tongdun") where user="tongdun";
+flush privileges;
+
+
+
+注释掉
+skip-grant-tables
+重启mysql才能配置下列权限
+
+GRANT ALL PRIVILEGES ON *.* TO root@'%' IDENTIFIED BY '123456' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON *.* TO root@'localhost' IDENTIFIED BY '123456' WITH GRANT OPTION;
+flush privileges;
+
+
+安装时显示密码过期:
+
+1.停止服务(sudo 或者 su root)
+service mysqld stop
+
+2.修改 /etc/my.cnf,在[mysqld]下面添加skip-grant-tables跳过密码验证
+skip-grant-tables
+保存修改
+
+3.重启mysql
+service mysqld start
+
+4.修改用户过期字段
+查看过期状态(会发现root为Y)
+select host,user,password_expired,account_locked from mysql.user;
+
+更新用户过期状态为N
+update mysql.user set password_expired='N';
+
+注释掉
+skip-grant-tables
+重启mysql才能配置下列权限
+
+设置密码不过期
+alter user 'root'@'localhost' password expire never;
+flush privileges;
+
+
+
+
+
+
+
+
+
+

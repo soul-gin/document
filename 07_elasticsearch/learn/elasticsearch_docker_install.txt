@@ -1,0 +1,386 @@
+
+注意: elasticsearch是不能在root用户下安装的,需要新建用户(root权限过大,容易产生安全问题)
+
+1.1 创建 admin 用户组
+groupadd admin
+创建使用admin用户组(-g 后面跟对应用户组)的用户 admin(第二个admin代表用户), -m (自动建立用户的登入目录)
+useradd -g admin admin -m
+
+或者
+
+直接 user add admin
+
+
+1.2 用户授权
+chmod +w /etc/sudoers
+vim /etc/sudoers
+在文件最后添加如下内容：
+# add privilege for admin
+
+admin ALL=(ALL) ALL
+
+# end
+
+
+
+1.3 环境准备,否则启动会存在问题
+vi /etc/security/limits.conf  添加用户级别句柄和进程
+
+#
+# begin
+#
+
+*   soft noproc   65535
+*   hard noproc   65535
+*   soft nofile   1000000
+*   hard nofile   1000000
+
+# 说明: * 代表针对所有用户
+# noproc 是代表最大进程数
+# nofile 是代表最大文件打开数
+
+# 系统级别句柄
+sysctl -w fs.file-max =65536
+
+#
+# end
+#
+
+
+vi /etc/profile
+# 添加这行
+ulimit -u 10000 
+
+使修改免重启并生效
+source /etc/profile
+
+vi /etc/sysctl.conf
+root用户,或sudo修改测试环境确保linux单个进程的最大线程数为655360
+在/etc/sysctl.conf文件最后添加,测试环境修改该值为655360(根据机器的性能调整,生产环境可以使用默认值999999)
+# change max memory that user can used
+vm.max_map_count=655360
+
+使内核配置生效
+sudo sysctl -p
+查看限制是否变更
+sudo sysctl -a|grep vm.max_map_count
+
+
+reboot 生效(部分直接source不能生效的配置)
+查看限制是否变更(open files 是否为 1000000)
+ulimit -a
+
+
+安装完成之后需要使用root用户才能操作docker，我们还需要将我们使用docker的用户添加到docker组中：
+将一个已有用户 username 增加到一个已有用户组 docker 中，使此用户组成为该用户的附加用户组，
+可以使用带 -a 参数的 usermod 指令。-a 代表 append， 也就是将用户添加到新用户组中而不必离开原有的其他用户组。
+不过需要与 -G 选项配合使用：
+sudo usermod -a -G docker username
+例：admin用户
+sudo usermod -a -G docker admin
+
+如果要将一个用户从某个组中删除，则
+gpasswd -d username group
+例：admin用户
+gpasswd -d admin group
+
+将用户添加到docker用户组之后，重启docker即可（同样执行完该命令之后，需将该用户shell退出重新登录）
+sudo systemctl restart docker
+
+
+
+1.4 拉取镜像:
+
+搜索镜像
+docker search 镜像名称
+docker search elasticsearch
+
+拉取
+docker pull elasticsearch:6.5.4
+
+
+1.5 单机创建容器并启动
+docker create --name elasticsearch --net host -e "discovery.type=single-node" -e "network.host=192.168.25.11" elasticsearch:6.5.4
+
+删除所有容器
+docker rm $(docker ps -aq)
+
+启动&&查看日志(注意:启动时,如果发现找不到docker-entrypoint.sh,说明下载的对应镜像存在问题,
+可能网络导致下载不全,可删除镜像重新下载; 或直接下载另一个小版本6.5.*或6.*.*)
+docker start elasticsearch && docker logs elasticsearch
+
+
+
+1.6 配置
+
+
+拷贝好elasticsearch.yml  jvm.options 并修改好配置
+通过查找命令可以找到
+find / -name elasticsearch.yml
+find / -name jvm.options
+一般路径类似下面格式:(在/var/lib/docker下面)
+/var/lib/docker/overlay2/cb23d026adab9eedde889a13d9e88ffbd0016e64926f49120fae8126dcf28a59/diff/usr/share/elasticsearch/config/
+
+jvm.options在测试环境可以配置为
+-Xms384m
+-Xmx384m
+
+chown admin:admin jvm.options
+mkdir /home/admin/es-cluster/node01/data
+chown admin:admin data
+
+创建配置文件挂载目录
+mkdir /home/admin/es-cluster/{node01,node02,node03} -p
+如果启动时会报文件无权限操作的错误,设置全用户读,写,执行权限(-R递归赋权)
+chmod 777 /home/admin/es-cluster/{node01,node02,node03} -R
+
+修改配置(使用cat直接覆盖需要注意对应版本,不同版本配置可能不同!!!)
+因三个es均部署在同一台服务器,所以discovery.zen.ping.unicast.hosts配置的是一个ip
+
+集群服务1:
+
+cat > /home/admin/es-cluster/node01/elasticsearch.yml <<'EOF'
+
+# cluster name, should be same
+cluster.name: atreusCluster
+# unique for different nodes
+node.name: node-1
+
+# Cluster node IP
+discovery.zen.ping.unicast.hosts: ["192.168.25.11"]
+# More nodes are separated by commas
+#discovery.zen.ping.unicast.hosts: ["10.30.12.2","10.30.12.3","10.30.12.4"]
+
+# Permission to be the master and data node
+node.master: true
+node.data: true
+# N = count(node.master: true), discovery = (N/2)+1, to avoid split-brain
+discovery.zen.minimum_master_nodes: 2
+
+# Current node IP PORT
+network.host: 192.168.25.11
+http.port: 9200
+
+# HTTP cross-origin REST request
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+
+EOF
+
+
+
+集群服务2:
+
+cat > /home/admin/es-cluster/node02/elasticsearch.yml <<'EOF'
+
+# cluster name, should be same
+cluster.name: atreusCluster
+# unique for different nodes
+node.name: node-2
+
+# Cluster node IP
+discovery.zen.ping.unicast.hosts: ["192.168.25.11"]
+# More nodes are separated by commas
+#discovery.zen.ping.unicast.hosts: ["10.30.12.2","10.30.12.3","10.30.12.4"]
+
+# Permission to be the master and data node
+node.master: true
+node.data: true
+# N = count(node.master: true), discovery = (N/2)+1, to avoid split-brain
+discovery.zen.minimum_master_nodes: 2
+
+# Current node IP PORT
+network.host: 192.168.25.11
+http.port: 9201
+
+# HTTP cross-origin REST request
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+
+EOF
+
+
+
+集群服务3:
+
+cat > /home/admin/es-cluster/node03/elasticsearch.yml <<'EOF'
+
+# cluster name, should be same
+cluster.name: atreusCluster
+# unique for different nodes
+node.name: node-3
+
+# Cluster node IP
+discovery.zen.ping.unicast.hosts: ["192.168.25.11"]
+# More nodes are separated by commas
+#discovery.zen.ping.unicast.hosts: ["10.30.12.2","10.30.12.3","10.30.12.4"]
+
+# Permission to be the master and data node
+node.master: true
+node.data: true
+# N = count(node.master: true), discovery = (N/2)+1, to avoid split-brain
+discovery.zen.minimum_master_nodes: 2
+
+# Current node IP PORT
+network.host: 192.168.25.11
+http.port: 9202
+
+# HTTP cross-origin REST request
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+
+EOF
+
+
+
+1.7 创建容器
+
+容器1:
+docker create --name es-node01 --net host -v /home/admin/es-cluster/node01/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml -v /home/admin/es-cluster/node01/jvm.options:/usr/share/elasticsearch/config/jvm.options -v /home/admin/es-cluster/node01/data:/usr/share/elasticsearch/data elasticsearch:6.5.4
+
+容器2:
+docker create --name es-node02 --net host -v /home/admin/es-cluster/node02/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml -v /home/admin/es-cluster/node02/jvm.options:/usr/share/elasticsearch/config/jvm.options -v /home/admin/es-cluster/node02/data:/usr/share/elasticsearch/data elasticsearch:6.5.4
+
+容器3:
+docker create --name es-node03 --net host \
+-v /home/admin/es-cluster/node03/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml \
+-v /home/admin/es-cluster/node03/jvm.options:/usr/share/elasticsearch/config/jvm.options \
+-v /home/admin/es-cluster/node03/data:/usr/share/elasticsearch/data elasticsearch:6.5.4;
+ 
+查看创建好的容器:
+docker ps -a
+
+删除容器
+docker rm es-node03 es-node02 es-node01
+
+1.8 启动容器
+docker start es-node01 && docker logs -f es-node01
+docker start es-node02 && docker logs -f es-node02
+docker start es-node03 && docker logs -f es-node03
+
+配置es内存
+vi /home/admin/mw/elasticsearch-5.0.2/config/jvm.options
+根据机器实际内存大小修改
+-Xms2g
+-Xmx2g
+2.6.4.	启动服务
+cd /home/admin/mw/elasticsearch-5.0.2/bin
+./elasticsearch -d
+或
+/home/admin/mw/elasticsearch-5.0.2/bin/elasticsearch -d 
+查看日志
+less /home/admin/mw/elasticsearch-5.0.2/logs/atreusCluster.log
+看到
+[2019-10-13T15:59:35,694][INFO ][o.e.n.Node               ] [node-1] started
+[2019-10-13T15:59:35,705][INFO ][o.e.g.GatewayService     ] [node-1] recovered [0] indices into cluster_state
+说明启动成功
+
+查看
+jps 
+看是否存在Elasticsearch应用
+
+停止
+获取pid
+jps|grep Elasticsearch|awk '{print $1}'
+kill进程
+jps|grep Elasticsearch|awk '{print $1}'|xargs kill -9
+
+慎用!!! 删除所有索引
+curl -XDELETE http://10.30.10.1:9200/_all
+
+
+
+2.6.5.	开放防火墙
+查看防火墙状态
+systemctl status firewalld
+临时关闭防火墙
+systemctl stop firewalld
+
+浏览器访问http://IP:9200/_cat/nodes?pretty
+单机显示如下信息表示集群成功：
+10.57.17.184 9 99 2 0.06 0.32 0.62 mdi * node-1
+集群显示如下信息表示集群成功：
+10.57.17.184 44 94 2 0.05 0.09 0.11 mdi * node-1
+10.57.17.185 22 73 1 0.08 0.06 0.05 mdi - node-2
+10.57.17.186 57 66 2 0.03 0.04 0.05 mdi - node-3
+
+例:
+windows访问
+http://10.57.17.184:9200/_cat/nodes?pretty  
+linux执行 
+curl http://10.57.17.184:9200/_cat/health?v    
+
+
+
+常见问题记录及解决方法
+启动报错：
+[node-1] node validation exception bootstrap checks failed
+max file descriptors [65535] for elasticsearch process is too low, increase to a
+t least [65536]
+解决：看文档最前面的环境准备
+
+
+准备初始化存储片区
+如果需要重新建,删除所有索引
+curl -XDELETE http://10.30.10.1:9200/_all
+
+脚本新建索引(atreus, holmes, freyr如果开启es统计,那么就需要建立对应索引)
+vim es_init_atreus_script52.py
+修改es_init_atreus_script52.py中的开始时间start和结束时间end,开始时间填写要比你想要的时间大一天.
+修改es_init_atreus_script52.py中的ipAddress为elasticsearch的ip,集群随便写哪一个都可以(单机就写本机ip).
+例:(三台es集群,索引7天一个,建两年,106个可以保持集群状态在green)
+start = "20190601"
+end = "20210531"
+ipAddress = "10.57.17.184:9200"
+
+
+
+同盾特殊操作:
+执行py脚本(注意:如果有elasticsearch-init.sh先删除!!! rm -f elasticsearch-init.sh )
+python es_init_atreus_script52.py
+查看是否多了个elasticsearch-init.sh文件
+ll
+
+如没执行权限请添加执行权限:
+chmod +x elasticsearch-init.sh
+
+在执行生成elasticsearch脚本：
+./elasticsearch-init.sh
+
+验证步奏：
+查看脚本执行的结果都为{"acknowledged":true}
+
+
+
+1、安装nodes 
+http://nodejs.cn/download/
+2、安装elasticdump：https://www.npmjs.com/package/elasticdump 
+命令：npm i elasticdump -g
+3、elasticdump --input=http://10.0.18.107:8088/elastic/atreus-*/entryinvokeresult --output=export_entry_2019082.json --type=data --sourceOnly=true
+
+
+elasticsearch保存dump
+tar -xvf   node-v12.14.1-linux-x64.tar.xz   
+mv node-v12.14.1-linux-x64  nodejs 
+ln -s /app/software/nodejs/bin/npm /usr/local/bin/ 
+ln -s /app/software/nodejs/bin/node /usr/local/bin/
+
+npm install elasticdump -g
+
+
+类型为 "_type": "entryinvokeresult" 
+
+./elasticdump  --input=http://10.30.10.1:9200/atreus-20200108 --output=/home/tongdun/demo.json
+atreus-*表示以atreus开头的索引;entryinvokeresult表示_type的值(数据类型)
+./elasticdump  --input=http://10.30.10.1:9200/atreus-*/entryinvokeresult --output=/home/tongdun/demo2.json
+./elasticdump  --input=http://10.30.12.2:9200/atreus-*/entryinvokeresult --output=/home/tongdun/esResult.json
+
+
+
+
+
+
+
+
+
+

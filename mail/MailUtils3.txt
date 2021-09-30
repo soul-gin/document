@@ -1,0 +1,42 @@
+try{   
+  
+		   JavaMailSenderImpl senderImpl = new JavaMailSenderImpl();  
+  
+		   senderImpl.setHost("smtp.163.com");  
+  
+		   senderImpl.setUsername("zhangfl85");  
+  
+		   senderImpl.setPassword("******");          
+  
+		   Properties props = new Properties();  
+  
+		   props.put("mail.smtp.auth","true");  
+  
+		   senderImpl.setJavaMailProperties(props);          
+  
+		   MimeMessage mimeMessage = senderImpl.createMimeMessage();  
+		   MimeMessageHelper mimeMessageHelper = new MimeMessageHelper(mimeMessage,true);  
+  
+		   //  在构建MimeMessageHelper时候，所给定的值是true表示启用，     
+  
+		   //multipart模式    
+  
+		   mimeMessageHelper.setTo("zhangfl85@126.com");  
+  
+		   mimeMessageHelper.setFrom("zhangfl85@163.com");  
+  
+		   mimeMessageHelper.setSubject("嵌入图片测试");        
+			 
+		   mimeMessageHelper.setText("<html><head></head><body><h1>hello!!zhangfl</h1>"+ "<img src=\"cid:image\"/></body></html>",true);              
+  
+		   FileSystemResource img = new FileSystemResource(new File("liang.jpg"));  
+  
+		   mimeMessageHelper.addInline("image",img);         
+  
+		   senderImpl.send(mimeMessage);           
+  
+	   }catch(Exception e){  
+  
+		   e.printStackTrace();  
+  
+}  

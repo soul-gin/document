@@ -1,0 +1,97 @@
+
+基于域名的虚拟主机配置步骤
+需求
+192.168.25.161:80 --> 静态文件目录/home/mw/nginx/html/www   浏览器地址栏域名显示 192.168.25.161
+192.168.25.169:80 --> 静态文件目录/home/mw/nginx/html/169   浏览器地址栏域名显示 192.168.25.169
+
+1.修改nginx.conf配置为
+
+worker_processes  1;
+events {
+    worker_connections  1024;
+}
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+    server {
+        listen       80;
+        server_name  192.168.25.161;
+        location / {
+            root   html/www;
+            index  index.html index.htm;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }
+    server {
+        listen       80;
+        server_name  192.168.25.169;
+        location / {
+            root   html/169;
+            index  index.html index.htm;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }
+}
+
+
+2. 准备素材
+	在eth0的基础上,设置一个新的ip映射到eth0( /24 是标准ip格式, 删除: ip addr del 192.168.25.169/24 dev eth0 )
+	ip addr add 192.168.25.169/24 dev eth0
+	mkdir /home/mw/nginx/html/169 -p
+	tree /home/mw/nginx/html
+	echo "192.168.25.169:80" > /home/mw/nginx/html/169/index.html
+	
+3.检查配置是否正确后重启(nginx访问量大,配置信息加载在内存中,不可能每次都要去读取磁盘)
+	重启前检查配置是否正确
+	/home/mw/nginx/sbin/nginx -t
+	显示如下表示正常
+nginx: the configuration file /home/mw/nginx-1.15.5/conf/nginx.conf syntax is ok
+nginx: configuration file /home/mw/nginx-1.15.5/conf/nginx.conf test is successful
+
+	重新加载
+	/home/mw/nginx/sbin/nginx -s reload
+	
+	查看nginx是否启动了这些端口(80端口)
+	netstat -lntup|grep nginx
+
+4.linux测试
+	curl 192.168.25.161  
+	会显示:www.nier.com:80 
+	
+	curl 192.168.25.169  
+	会显示:192.168.25.169:80    
+	
+5.windows测试
+	win+r 输入 drivers,打开 etc 文件夹,找到 hosts
+	将 192.168.25.161 www.nier.com bbs.nier.com 复制到hosts中,保存
+	然后在浏览器中输入
+	192.168.25.161
+	会显示:www.nier.com:80 
+	
+	192.168.25.169
+	会显示:192.168.25.161:80  
+	
+	
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+
+
