@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "out_access_service begin, sleep 999999s ..."
+sleep 999999s
