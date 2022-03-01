@@ -39,6 +39,7 @@ do
 
       #将错误信息写入最新时间的日志文件
       #echo -e "\nERROR app not running\n" >> ./log/`ls ./log -t|grep "out_access_service.log" |head -n 1`
+      #echo -e "\n ERROR : app not running ERROR IP=`grep IPADDR /etc/sysconfig/network-scripts/ifcfg-eth1|cut -d= -f2` \n" >> ./`ls ./ -t|grep "data_sync_service.log" |head -n 1`
       sleep 3s
     else
       echo "$APP_FILE $APP_PID is running"
