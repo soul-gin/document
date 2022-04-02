@@ -1,0 +1,8 @@
+
+
+
+# 使用 ] 作为分隔符, 切割test.txt, 取切割完成后的每行的第一个变量
+awk -F] '{print $1}'  test.txt
+
+# '!x[$0]++' 对文件 repeat.txt 按每行数据进行判断是否唯一, 去除重复数据输出到 repeat_new.txt
+awk '!x[$0]++' repeat.txt > repeat_new.txt
